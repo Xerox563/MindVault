@@ -1,7 +1,9 @@
 from pydantic_settings import BaseSettings
+import os
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/mindvault"
+    # Use SQLite by default, fallback to PostgreSQL if DATABASE_URL is set
+    DATABASE_URL: str = "sqlite:///./data/mindvault.db"
     MISTRAL_API_KEY: str = ""
     JWT_SECRET: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"

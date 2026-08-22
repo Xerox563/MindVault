@@ -1,17 +1,17 @@
 import os
-from mistralai import Mistral
+from mistralai.client import MistralClient
 from app.config import settings
 from app.utils.logger import log_error, log_info
 from app.utils.retry import retry
 
-client = Mistral(api_key=settings.MISTRAL_API_KEY) if settings.MISTRAL_API_KEY else None
+client = MistralClient(api_key=settings.MISTRAL_API_KEY) if settings.MISTRAL_API_KEY else None
 
 @retry(max_attempts=3, delay=1.0)
 def get_embedding(text: str) -> list[float]:
     if not client:
         log_error("Mistral API key not configured")
         return []
-    response = client.embeddings.create(
+    response = client.embeddings(
         model="mistral-embed",
         input=text
     )
@@ -27,7 +27,7 @@ def get_chat_response(prompt: str, context: str = "") -> str:
         {"role": "system", "content": "You are a helpful assistant. Answer based on the provided context."},
         {"role": "user", "content": f"Context: {context}\n\nQuestion: {prompt}"}
     ]
-    response = client.chat.complete(
+    response = client.chat(
         model="mistral-large-latest",
         messages=messages
     )
