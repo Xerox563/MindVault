@@ -1,12 +1,11 @@
 "use client";
 
 import { useAuth, useUser, SignOutButton } from "@clerk/nextjs";
-import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { 
   Upload, 
-  MessageSquare, 
   FileText, 
   Trash2, 
   LogOut,
@@ -17,7 +16,20 @@ import {
   Menu,
   ChevronRight,
   Search,
-  User
+  User,
+  MessageCircle,
+  Plus,
+  Settings,
+  MoreHorizontal,
+  Download,
+  ExternalLink,
+  Zap,
+  Shield,
+  Cpu,
+  LayoutGrid,
+  FolderOpen,
+  Clock,
+  TrendingUp
 } from "lucide-react";
 import { AnimatedBackground, GradientText } from "@/components/animations";
 
@@ -44,9 +56,82 @@ interface Message {
   sources?: string[];
 }
 
+// Custom hook for mouse position
+function useMousePosition() {
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  
+  useEffect(() => {
+    const updateMousePosition = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener("mousemove", updateMousePosition);
+    return () => window.removeEventListener("mousemove", updateMousePosition);
+  }, []);
+  
+  return mousePosition;
+}
+
+// Glowing Button Component
+const GlowingButton = ({ children, onClick, className = "", disabled = false }: any) => (
+  <motion.button
+    onClick={onClick}
+    disabled={disabled}
+    className={`relative group ${className}`}
+    whileHover={{ scale: disabled ? 1 : 1.02 }}
+    whileTap={{ scale: disabled ? 1 : 0.98 }}
+  >
+    <div className="absolute -inset-1 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+    <div className="relative">
+      {children}
+    </div>
+  </motion.button>
+);
+
+// Glass Card Component
+const GlassCard = ({ children, className = "" }: any) => (
+  <motion.div
+    className={`relative overflow-hidden ${className}`}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5 }}
+  >
+    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-white/5 rounded-2xl backdrop-blur-xl border border-white/20" />
+    <div className="relative z-10">
+      {children}
+    </div>
+  </motion.div>
+);
+
+// Animated Background Orb
+const FloatingOrb = ({ delay = 0, size = 300, color = "violet" }: any) => (
+  <motion.div
+    className="absolute rounded-full pointer-events-none"
+    style={{
+      width: size,
+      height: size,
+      background: `radial-gradient(circle, ${color === 'violet' ? 'rgba(139, 92, 246, 0.3)' : color === 'cyan' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(245, 158, 11, 0.2)'} 0%, transparent 70%)`,
+      filter: "blur(60px)",
+    }}
+    animate={{
+      x: [0, 30, 0],
+      y: [0, -30, 0],
+      scale: [1, 1.1, 1],
+    }}
+    transition={{
+      duration: 8,
+      repeat: Infinity,
+      ease: "easeInOut",
+      delay,
+    }}
+  />
+);
+
 export default function Dashboard() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
+  const mousePosition = useMousePosition();
+  const containerRef = useRef<HTMLDivElement>(null);
+  
   const [files, setFiles] = useState<FileItem[]>([]);
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -58,6 +143,11 @@ export default function Dashboard() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [dragActive, setDragActive] = useState(false);
+  const [activeTab, setActiveTab] = useState("chat");
+  const [isHoveringUpload, setIsHoveringUpload] = useState(false);
+
+  const { scrollYProgress } = useScroll({ container: containerRef });
+  const headerOpacity = useTransform(scrollYProgress, [0, 0.1], [0, 1]);
 
   // Check auth and fetch files
   useEffect(() => {
@@ -97,7 +187,6 @@ export default function Dashboard() {
         setDriveFiles(await res.json());
         setShowDrive(true);
       } else if (res.status === 400) {
-        // Google Drive not connected - show connect option
         const data = await res.json();
         if (data.detail?.includes("not connected")) {
           window.open(`${API_URL}/api/auth/google/connect`, "_blank", "width=500,height=600");
@@ -106,56 +195,6 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Failed to fetch drive files:", error);
     }
-  };
-  
-  const connectGoogleDrive = async () => {
-    const token = await getAuthToken();
-    console.log("Token for popup:", token ? "Present (length: " + token.length + ")" : "MISSING");
-    
-    if (!token) {
-      alert("Please sign in first");
-      return;
-    }
-    
-    const url = `${API_URL}/api/auth/google/connect?token=${encodeURIComponent(token)}`;
-    console.log("Opening popup URL:", url.substring(0, 100) + "...");
-    
-    // Open Google OAuth in a popup with token in URL
-    const popup = window.open(
-      url,
-      "Connect Google Drive",
-      "width=500,height=600"
-    );
-    
-    // Check if popup was blocked
-    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-      alert("Please allow popups to connect Google Drive");
-      return;
-    }
-    
-    // Listen for message from popup
-    const messageHandler = (event: MessageEvent) => {
-      if (event.data === 'google-drive-connected') {
-        window.removeEventListener('message', messageHandler);
-        // Refresh Drive files
-        setTimeout(() => {
-          fetchDriveFiles();
-        }, 500);
-      }
-    };
-    window.addEventListener('message', messageHandler);
-    
-    // Poll for popup close as fallback
-    const timer = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(timer);
-        window.removeEventListener('message', messageHandler);
-        // Refresh after connection attempt
-        setTimeout(() => {
-          fetchDriveFiles();
-        }, 1000);
-      }
-    }, 1000);
   };
 
   const handleUpload = async (file: File) => {
@@ -218,22 +257,6 @@ export default function Dashboard() {
       if (res.ok) setViewing(await res.json());
     } catch (error) {
       console.error("Failed to view file:", error);
-    }
-  };
-
-  const handleSyncDriveFile = async (fileId: string) => {
-    const token = await getAuthToken();
-    if (!token) return;
-    
-    try {
-      await fetch(`${API_URL}/api/sync/drive/${fileId}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      fetchFiles();
-      setShowDrive(false);
-    } catch (error) {
-      console.error("Sync failed:", error);
     }
   };
 
@@ -309,11 +332,18 @@ export default function Dashboard() {
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <motion.div
-          className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        />
+        <div className="relative">
+          <motion.div
+            className="w-16 h-16 rounded-full border-4 border-violet-500/20 border-t-violet-500"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          />
+          <motion.div
+            className="absolute inset-0 rounded-full bg-violet-500/20 blur-xl"
+            animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+        </div>
       </div>
     );
   }
@@ -321,93 +351,122 @@ export default function Dashboard() {
   if (!isSignedIn) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center">
-        <p className="text-white mb-4">Please sign in to access the dashboard</p>
-        <Link href="/login">
-          <motion.button
-            className="px-6 py-3 rounded-full bg-gradient-to-r from-violet-500 to-cyan-500 text-white font-semibold"
-            whileHover={{ scale: 1.05 }}
-          >
-            Sign In
-          </motion.button>
-        </Link>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center"
+        >
+          <Brain className="w-20 h-20 text-violet-500 mx-auto mb-6" />
+          <p className="text-white text-xl mb-4">Please sign in to access the dashboard</p>
+          <Link href="/login">
+            <GlowingButton className="px-8 py-4 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-xl text-white font-semibold">
+              Sign In
+            </GlowingButton>
+          </Link>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white overflow-hidden">
-      <AnimatedBackground />
+    <div className="min-h-screen bg-[#0a0a0a] text-white overflow-hidden relative" ref={containerRef}>
+      {/* Animated Background */}
+      <div className="fixed inset-0 pointer-events-none">
+        <AnimatedBackground />
+        <FloatingOrb delay={0} size={400} color="violet" className="top-20 left-10" />
+        <FloatingOrb delay={2} size={300} color="cyan" className="bottom-20 right-10" />
+        <FloatingOrb delay={4} size={350} color="amber" className="top-1/2 left-1/3" />
+      </div>
       
+      {/* Spotlight Effect */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-0"
+        style={{
+          background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(139, 92, 246, 0.1), transparent 40%)`,
+        }}
+      />
+
       {/* Header */}
       <motion.header 
-        className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10 h-16"
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5 }}
+        className="fixed top-0 left-0 right-0 z-50 px-6 py-4"
+        style={{ opacity: headerOpacity }}
       >
-        <div className="h-full px-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <motion.button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Menu className="w-5 h-5" />
-            </motion.button>
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
-                <Brain className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-bold text-lg hidden sm:block">
-                <GradientText>MindVault</GradientText>
-              </span>
-            </Link>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <motion.button
-              onClick={fetchDriveFiles}
-              className="flex items-center gap-2 px-4 py-2 rounded-full glass text-sm font-medium hover:bg-white/10 transition-colors"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Cloud className="w-4 h-4" />
-              <span className="hidden sm:inline">Google Drive</span>
-            </motion.button>
-            
-            {/* User Menu */}
-            <div className="flex items-center gap-2">
-              {user?.imageUrl ? (
-                <img
-                  src={user.imageUrl}
-                  alt={user.firstName || "User"}
-                  className="w-8 h-8 rounded-full border border-white/20"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
-                  <User className="w-4 h-4" />
-                </div>
-              )}
-              <span className="text-sm text-gray-300 hidden md:block">
-                {user?.firstName || user?.emailAddresses[0]?.emailAddress}
-              </span>
-              <SignOutButton>
+        <div className="max-w-7xl mx-auto">
+          <GlassCard className="px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
                 <motion.button
-                  className="p-2 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="p-2 rounded-xl hover:bg-white/10 transition-colors"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <LogOut className="w-5 h-5" />
+                  <Menu className="w-5 h-5" />
                 </motion.button>
-              </SignOutButton>
+                <Link href="/" className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
+                      <Brain className="w-6 h-6 text-white" />
+                    </div>
+                    <motion.div
+                      className="absolute -inset-1 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-xl blur opacity-50"
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    />
+                  </div>
+                  <span className="font-bold text-xl">
+                    <GradientText>MindVault</GradientText>
+                  </span>
+                </Link>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <GlowingButton 
+                  onClick={() => setActiveTab("chat")}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl ${activeTab === "chat" ? "bg-white/20" : ""}`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span className="text-sm">Chat</span>
+                </GlowingButton>
+                
+                <GlowingButton 
+                  onClick={() => setActiveTab("files")}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl ${activeTab === "files" ? "bg-white/20" : ""}`}
+                >
+                  <FolderOpen className="w-4 h-4" />
+                  <span className="text-sm">Files</span>
+                </GlowingButton>
+                
+                <div className="flex items-center gap-3 pl-4 border-l border-white/10">
+                  {user?.imageUrl ? (
+                    <motion.img
+                      src={user.imageUrl}
+                      alt={user.firstName || "User"}
+                      className="w-10 h-10 rounded-full border-2 border-violet-500/50"
+                      whileHover={{ scale: 1.1 }}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
+                      <User className="w-5 h-5" />
+                    </div>
+                  )}
+                  <SignOutButton>
+                    <motion.button
+                      className="p-2 rounded-xl hover:bg-red-500/20 text-red-400 transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </motion.button>
+                  </SignOutButton>
+                </div>
+              </div>
             </div>
-          </div>
+          </GlassCard>
         </div>
       </motion.header>
 
-      <div className="flex pt-16 h-screen">
-        {/* Sidebar - Same as before */}
+      <div className="flex pt-24 h-screen">
+        {/* Sidebar */}
         <AnimatePresence mode="wait">
           {sidebarOpen && (
             <motion.aside
@@ -415,26 +474,27 @@ export default function Dashboard() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -320, opacity: 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="w-80 glass-strong border-r border-white/10 flex flex-col"
+              className="w-80 flex flex-col gap-6 p-6 overflow-y-auto"
             >
-              {/* Upload Area */}
-              <div className="p-6 border-b border-white/10">
-                <h2 className="text-sm font-semibold text-gray-400 mb-4 flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  Upload Documents
-                </h2>
-                
+              {/* Upload Zone */}
+              <motion.div
+                className="relative"
+                onMouseEnter={() => setIsHoveringUpload(true)}
+                onMouseLeave={() => setIsHoveringUpload(false)}
+              >
                 <motion.div
+                  className={`absolute -inset-1 rounded-2xl bg-gradient-to-r from-violet-500 to-cyan-500 opacity-20 blur transition-opacity ${isHoveringUpload ? "opacity-40" : ""}`}
+                />
+                <div 
                   className={`relative p-8 rounded-2xl border-2 border-dashed transition-all duration-300 ${
                     dragActive 
-                      ? "border-violet-500 bg-violet-500/10" 
-                      : "border-white/20 hover:border-white/40"
+                      ? "border-violet-500 bg-violet-500/10 scale-[1.02]" 
+                      : "border-white/20 hover:border-violet-500/50 bg-white/5"
                   }`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  whileHover={{ scale: 1.02 }}
                 >
                   <input
                     type="file"
@@ -444,35 +504,36 @@ export default function Dashboard() {
                   />
                   <div className="text-center">
                     <motion.div
-                      className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-3"
-                      animate={{ y: [0, -5, 0] }}
-                      transition={{ duration: 2, repeat: Infinity }}
+                      className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-4"
+                      animate={{ y: isHoveringUpload ? -5 : 0 }}
+                      transition={{ type: "spring" }}
                     >
-                      <Upload className="w-6 h-6 text-violet-400" />
+                      <Plus className="w-8 h-8 text-violet-400" />
                     </motion.div>
                     <p className="text-sm text-gray-400">
-                      Drop files here or click to upload
+                      Drop files or click to upload
                     </p>
                     <p className="text-xs text-gray-600 mt-1">
-                      PDF, DOCX, XLSX, TXT (max 50MB)
+                      PDF, DOCX, XLSX, TXT
                     </p>
                   </div>
-                </motion.div>
+                </div>
+              </motion.div>
 
-                {/* Upload Progress */}
-                <AnimatePresence>
-                  {uploading && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="mt-4"
-                    >
+              {/* Upload Progress */}
+              <AnimatePresence>
+                {uploading && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <GlassCard className="p-4">
                       <div className="flex items-center justify-between text-xs mb-2">
                         <span className="text-gray-400 truncate">{uploading}</span>
-                        <span className="text-violet-400">{uploadProgress}%</span>
+                        <span className="text-violet-400 font-mono">{uploadProgress}%</span>
                       </div>
-                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                         <motion.div
                           className="h-full bg-gradient-to-r from-violet-500 to-cyan-500 rounded-full"
                           initial={{ width: 0 }}
@@ -480,55 +541,68 @@ export default function Dashboard() {
                           transition={{ duration: 0.3 }}
                         />
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                    </GlassCard>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Files List */}
-              <div className="flex-1 overflow-hidden flex flex-col">
-                <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
+                    <FolderOpen className="w-4 h-4" />
                     Your Files
                   </h3>
-                  <span className="text-xs bg-white/10 px-2 py-1 rounded-full">
+                  <motion.span 
+                    className="text-xs bg-violet-500/20 text-violet-300 px-2 py-1 rounded-full"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    key={files.length}
+                  >
                     {files.length}
-                  </span>
+                  </motion.span>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                <div className="space-y-3">
                   {files.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <motion.div 
+                      className="text-center py-8 text-gray-600"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                    >
+                      <FileText className="w-10 h-8 mx-auto mb-3 opacity-30" />
                       <p className="text-sm">No files yet</p>
                       <p className="text-xs mt-1">Upload your first document</p>
-                    </div>
+                    </motion.div>
                   ) : (
                     files.map((file, index) => (
                       <motion.div
                         key={file.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.05 }}
-                        className="group relative p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all"
+                        className="group relative p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/30 transition-all cursor-pointer"
+                        whileHover={{ x: 5 }}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            file.file_type.includes('pdf') ? 'bg-red-500/20 text-red-400' :
-                            file.file_type.includes('word') || file.file_type.includes('doc') ? 'bg-blue-500/20 text-blue-400' :
-                            file.file_type.includes('excel') || file.file_type.includes('sheet') ? 'bg-green-500/20 text-green-400' :
-                            'bg-gray-500/20 text-gray-400'
-                          }`}>
+                          <motion.div 
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                              file.file_type.includes('pdf') ? 'bg-red-500/20 text-red-400' :
+                              file.file_type.includes('word') || file.file_type.includes('doc') ? 'bg-blue-500/20 text-blue-400' :
+                              file.file_type.includes('excel') || file.file_type.includes('sheet') ? 'bg-green-500/20 text-green-400' :
+                              'bg-gray-500/20 text-gray-400'
+                            }`}
+                            whileHover={{ rotate: 5, scale: 1.1 }}
+                          >
                             <FileText className="w-5 h-5" />
-                          </div>
+                          </motion.div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{file.filename}</p>
+                            <p className="text-sm font-medium truncate group-hover:text-violet-300 transition-colors">{file.filename}</p>
                             <p className="text-xs text-gray-500">{formatFileSize(file.file_size)}</p>
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <motion.button
-                              onClick={() => handleView(file.id)}
+                              onClick={(e) => { e.stopPropagation(); handleView(file.id); }}
                               className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white"
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
@@ -536,7 +610,7 @@ export default function Dashboard() {
                               <Search className="w-4 h-4" />
                             </motion.button>
                             <motion.button
-                              onClick={() => handleDelete(file.id)}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(file.id); }}
                               className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400"
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
@@ -550,208 +624,162 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
+
+              {/* Google Drive Button */}
+              <GlowingButton 
+                onClick={fetchDriveFiles}
+                className="w-full py-4 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-xl flex items-center justify-center gap-2 text-blue-300"
+              >
+                <Cloud className="w-5 h-5" />
+                <span className="font-medium">Google Drive</span>
+              </GlowingButton>
             </motion.aside>
           )}
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col min-w-0">
-          {showDrive ? (
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }}
-              className="flex-1 p-6 overflow-auto"
-            >
-              <div className="max-w-4xl mx-auto">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Cloud className="w-6 h-6 text-cyan-400" />
-                    Google Drive
-                  </h2>
-                  <motion.button
-                    onClick={() => setShowDrive(false)}
-                    className="p-2 rounded-lg hover:bg-white/10"
-                    whileHover={{ scale: 1.05, rotate: 90 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <X className="w-5 h-5" />
-                  </motion.button>
-                </div>
-                
-                <div className="grid gap-3">
-                  {driveFiles.length === 0 ? (
-                    <motion.div 
-                      className="text-center py-12"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <Cloud className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-                      <p className="text-gray-400 mb-4">No files found or Google Drive not connected</p>
-                      <motion.button
-                        onClick={connectGoogleDrive}
-                        className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium flex items-center gap-2 mx-auto"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <Cloud className="w-5 h-5" />
-                        Connect Google Drive
-                      </motion.button>
-                    </motion.div>
-                  ) : (
-                    driveFiles.map((file, index) => (
-                    <motion.div
-                      key={file.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="p-4 rounded-xl glass flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center">
-                          <Cloud className="w-5 h-5 text-blue-400" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{file.name}</p>
-                          <p className="text-xs text-gray-500">{file.mimeType}</p>
-                        </div>
-                      </div>
-                      <motion.button
-                        onClick={() => handleSyncDriveFile(file.id)}
-                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 text-sm font-medium flex items-center gap-2"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <Upload className="w-4 h-4" />
-                        Sync
-                      </motion.button>
-                    </motion.div>
-                  )))}
-                </div>
-              </div>
-            </motion.div>
-          ) : (
-            <>
+        <main className="flex-1 flex flex-col min-w-0 p-6">
+          {activeTab === "chat" ? (
+            <div className="flex-1 flex flex-col">
               {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="max-w-4xl mx-auto space-y-6">
-                  {messages.length === 0 ? (
-                    <motion.div 
-                      className="h-full flex flex-col items-center justify-center text-center py-20"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.5 }}
-                    >
-                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center mb-6">
-                        <Sparkles className="w-10 h-10 text-violet-400" />
+              <div className="flex-1 overflow-y-auto space-y-6 mb-6">
+                {messages.length === 0 ? (
+                  <motion.div 
+                    className="h-full flex flex-col items-center justify-center text-center"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                  >
+                    <div className="relative mb-8">
+                      <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center">
+                        <Sparkles className="w-12 h-12 text-violet-400" />
                       </div>
-                      <h3 className="text-2xl font-bold mb-3">Welcome to MindVault</h3>
-                      <p className="text-gray-400 max-w-md mb-6">
-                        Upload documents and ask questions about them. Our AI will 
-                        search through your files and provide accurate answers with sources.
-                      </p>
-                      <div className="flex flex-wrap justify-center gap-2">
-                        {["What are my documents about?", "Summarize the key points", "Find specific information"].map((suggestion) => (
-                          <motion.button
-                            key={suggestion}
-                            onClick={() => setInputMessage(suggestion)}
-                            className="px-4 py-2 rounded-full glass text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            {suggestion}
-                          </motion.button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  ) : (
-                    messages.map((message) => (
                       <motion.div
-                        key={message.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div className={`max-w-[80%] ${message.role === "user" ? "items-end" : "items-start"}`}>
-                          <div className={`p-4 rounded-2xl ${
+                        className="absolute -inset-2 rounded-2xl bg-gradient-to-r from-violet-500/20 to-cyan-500/20 blur-xl"
+                        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                      />
+                    </div>
+                    <h3 className="text-3xl font-bold mb-4 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                      Welcome to MindVault
+                    </h3>
+                    <p className="text-gray-400 max-w-md mb-8 text-lg">
+                      Upload documents and ask questions about them. Our AI will search through your files and provide accurate answers with sources.
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-3">
+                      {["What are my documents about?", "Summarize key points", "Find specific information"].map((suggestion, i) => (
+                        <motion.button
+                          key={suggestion}
+                          onClick={() => setInputMessage(suggestion)}
+                          className="px-6 py-3 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 hover:border-violet-500/50 transition-all"
+                          whileHover={{ scale: 1.05, y: -2 }}
+                          whileTap={{ scale: 0.95 }}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.1 }}
+                        >
+                          {suggestion}
+                        </motion.button>
+                      ))}
+                    </div>
+                  </motion.div>
+                ) : (
+                  messages.map((message, index) => (
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div className={`max-w-[80%] ${message.role === "user" ? "items-end" : "items-start"}`}>
+                        <motion.div 
+                          className={`p-5 rounded-2xl relative ${
                             message.role === "user" 
                               ? "bg-gradient-to-r from-violet-500 to-cyan-500 text-white" 
-                              : "glass"
-                          }`}>
-                            <p className="leading-relaxed">{message.content}</p>
-                          </div>
-                          {message.sources && message.sources.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {message.sources.map((source, i) => (
-                                <span 
-                                  key={i} 
-                                  className="text-xs px-2 py-1 rounded-full bg-white/10 text-gray-400"
-                                >
-                                  Source: {source}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    ))
-                  )}
-                  {isChatLoading && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="flex justify-start"
-                    >
-                      <div className="glass p-4 rounded-2xl flex items-center gap-3">
-                        <motion.div
-                          className="w-2 h-2 bg-violet-400 rounded-full"
-                          animate={{ scale: [1, 1.5, 1] }}
-                          transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
-                        />
-                        <motion.div
-                          className="w-2 h-2 bg-cyan-400 rounded-full"
-                          animate={{ scale: [1, 1.5, 1] }}
-                          transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}
-                        />
-                        <motion.div
-                          className="w-2 h-2 bg-amber-400 rounded-full"
-                          animate={{ scale: [1, 1.5, 1] }}
-                          transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }}
-                        />
+                              : "bg-white/10 border border-white/20"
+                          }`}
+                          whileHover={{ scale: 1.01 }}
+                        >
+                          <p className="leading-relaxed">{message.content}</p>
+                        </motion.div>
+                        {message.sources && message.sources.length > 0 && (
+                          <motion.div 
+                            className="mt-3 flex flex-wrap gap-2"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.2 }}
+                          >
+                            {message.sources.map((source, i) => (
+                              <span 
+                                key={i} 
+                                className="text-xs px-3 py-1.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30"
+                              >
+                                <Zap className="w-3 h-3 inline mr-1" />
+                                {source}
+                              </span>
+                            ))}
+                          </motion.div>
+                        )}
                       </div>
                     </motion.div>
-                  )}
-                </div>
+                  ))
+                )}
+                
+                {isChatLoading && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex justify-start"
+                  >
+                    <div className="bg-white/10 border border-white/20 p-5 rounded-2xl flex items-center gap-4">
+                      {[0, 1, 2].map((i) => (
+                        <motion.div
+                          key={i}
+                          className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-400 to-cyan-400"
+                          animate={{ 
+                            scale: [1, 1.5, 1],
+                            opacity: [0.5, 1, 0.5]
+                          }}
+                          transition={{ 
+                            duration: 0.6, 
+                            repeat: Infinity, 
+                            delay: i * 0.15 
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               {/* Chat Input */}
-              <div className="p-4 border-t border-white/10">
-                <div className="max-w-4xl mx-auto">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                      placeholder="Ask about your documents..."
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl pl-5 pr-14 py-4 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 transition-all"
-                    />
-                    <motion.button
-                      onClick={handleSendMessage}
-                      disabled={!inputMessage.trim() || isChatLoading}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </motion.button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2 text-center">
-                    MindVault uses AI to search your documents. Responses may not always be accurate.
-                  </p>
+              <GlassCard className="p-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                    placeholder="Ask about your documents..."
+                    className="w-full bg-transparent pl-6 pr-16 py-5 text-white placeholder-gray-500 focus:outline-none text-lg"
+                  />
+                  <motion.button
+                    onClick={handleSendMessage}
+                    disabled={!inputMessage.trim() || isChatLoading}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 flex items-center justify-center disabled:opacity-50"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                  </motion.button>
                 </div>
-              </div>
-            </>
+              </GlassCard>
+            </div>
+          ) : (
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold mb-6">Files</h2>
+              {/* Files grid view would go here */}
+            </div>
           )}
         </main>
       </div>
@@ -770,28 +798,29 @@ export default function Dashboard() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-4xl max-h-[90vh] glass-strong rounded-2xl overflow-hidden"
+              className="w-full max-w-4xl max-h-[90vh] overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-violet-400" />
-                  <span className="font-medium">{viewing.filename}</span>
+              <GlassCard className="h-full">
+                <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-5 h-5 text-violet-400" />
+                    <span className="font-medium">{viewing.filename}</span>
+                  </div>
+                  <motion.button
+                    onClick={() => setViewing(null)}
+                    className="p-2 rounded-lg hover:bg-white/10"
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                  >
+                    <X className="w-5 h-5" />
+                  </motion.button>
                 </div>
-                <motion.button
-                  onClick={() => setViewing(null)}
-                  className="p-2 rounded-lg hover:bg-white/10"
-                  whileHover={{ scale: 1.05, rotate: 90 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <X className="w-5 h-5" />
-                </motion.button>
-              </div>
-              <div className="p-6 overflow-auto max-h-[70vh]">
-                <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
-                  {viewing.content}
-                </pre>
-              </div>
+                <div className="p-6 overflow-auto max-h-[70vh]">
+                  <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
+                    {viewing.content}
+                  </pre>
+                </div>
+              </GlassCard>
             </motion.div>
           </motion.div>
         )}
