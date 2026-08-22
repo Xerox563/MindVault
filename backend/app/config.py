@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
     CLERK_SECRET_KEY: str = ""
+    
+    # LLM Configuration - supports both Mistral and Ollama
+    LLM_PROVIDER: str = "mistral"  # Options: "mistral", "ollama"
+    OLLAMA_HOST: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.2"  # Default Ollama model
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"  # For embeddings
 
     class Config:
         env_file = ".env"

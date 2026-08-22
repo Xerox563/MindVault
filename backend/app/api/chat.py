@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, ChatHistory, Citation, File, Chunk
 from app.schemas.chat import AskRequest, AskResponse
 from app.utils.deps import get_current_user
 from app.services.rag import rag_query
+from app.services.llm_service import llm_service
+from app.config import settings
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -38,3 +40,40 @@ def ask_question(request: AskRequest, db: Session = Depends(get_db), current_use
 def get_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     chats = db.query(ChatHistory).filter(ChatHistory.user_id == current_user.id).order_by(ChatHistory.created_at.desc()).all()
     return [{"id": c.id, "question": c.question, "answer": c.answer, "created_at": c.created_at} for c in chats]
+
+@router.get("/llm/status")
+def get_llm_status(current_user: User = Depends(get_current_user)):
+    """Get current LLM provider status"""
+    status = {
+        "provider": settings.LLM_PROVIDER,
+        "model": llm_service.model,
+        "embedding_model": llm_service.embedding_model,
+    }
+    
+    # Check Ollama connection if using Ollama
+    if settings.LLM_PROVIDER == "ollama":
+        status["ollama_connected"] = llm_service.check_ollama_connection()
+        status["available_models"] = llm_service.list_ollama_models()
+    
+    return status
+
+@router.get("/llm/ollama/models")
+def list_ollama_models(current_user: User = Depends(get_current_user)):
+    """List available Ollama models"""
+    if settings.LLM_PROVIDER != "ollama":
+        raise HTTPException(400, "Not using Ollama provider")
+    
+    models = llm_service.list_ollama_models()
+    return {"models": models}
+
+@router.post("/llm/ollama/pull/{model_name}")
+def pull_ollama_model(model_name: str, current_user: User = Depends(get_current_user)):
+    """Pull an Ollama model"""
+    if settings.LLM_PROVIDER != "ollama":
+        raise HTTPException(400, "Not using Ollama provider")
+    
+    success = llm_service.pull_ollama_model(model_name)
+    if success:
+        return {"message": f"Successfully pulled model: {model_name}"}
+    else:
+        raise HTTPException(500, f"Failed to pull model: {model_name}")
