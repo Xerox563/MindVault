@@ -87,8 +87,7 @@ export default function SignUpPage({ params }: { params: { rest?: string[] } }) 
               routing="path"
               path="/signup"
               signInUrl="/login"
-              redirectUrl="/dashboard"
-              forceRedirectUrl="/dashboard"
+              fallbackRedirectUrl="/dashboard"
             />
           </motion.div>
         </FadeIn>

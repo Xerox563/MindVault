@@ -96,10 +96,42 @@ export default function Dashboard() {
       if (res.ok) {
         setDriveFiles(await res.json());
         setShowDrive(true);
+      } else if (res.status === 400) {
+        // Google Drive not connected - show connect option
+        const data = await res.json();
+        if (data.detail?.includes("not connected")) {
+          window.open(`${API_URL}/api/auth/google/connect`, "_blank", "width=500,height=600");
+        }
       }
     } catch (error) {
       console.error("Failed to fetch drive files:", error);
     }
+  };
+  
+  const connectGoogleDrive = () => {
+    // Open Google OAuth in a popup
+    const popup = window.open(
+      `${API_URL}/api/auth/google/connect`,
+      "Connect Google Drive",
+      "width=500,height=600"
+    );
+    
+    // Check if popup was blocked
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      alert("Please allow popups to connect Google Drive");
+      return;
+    }
+    
+    // Poll for popup close
+    const timer = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(timer);
+        // Refresh after connection attempt
+        setTimeout(() => {
+          fetchDriveFiles();
+        }, 1000);
+      }
+    }, 1000);
   };
 
   const handleUpload = async (file: File) => {
@@ -523,7 +555,26 @@ export default function Dashboard() {
                 </div>
                 
                 <div className="grid gap-3">
-                  {driveFiles.map((file, index) => (
+                  {driveFiles.length === 0 ? (
+                    <motion.div 
+                      className="text-center py-12"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                    >
+                      <Cloud className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+                      <p className="text-gray-400 mb-4">No files found or Google Drive not connected</p>
+                      <motion.button
+                        onClick={connectGoogleDrive}
+                        className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium flex items-center gap-2 mx-auto"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <Cloud className="w-5 h-5" />
+                        Connect Google Drive
+                      </motion.button>
+                    </motion.div>
+                  ) : (
+                    driveFiles.map((file, index) => (
                     <motion.div
                       key={file.id}
                       initial={{ opacity: 0, x: -20 }}
@@ -550,7 +601,7 @@ export default function Dashboard() {
                         Sync
                       </motion.button>
                     </motion.div>
-                  ))}
+                  )))}
                 </div>
               </div>
             </motion.div>

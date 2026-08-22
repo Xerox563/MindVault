@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from google_auth_oauthlib.flow import Flow
 from app.database import get_db
 from app.models.user import User
-from app.utils.deps import get_current_user, get_google_drive_service_from_clerk
+from app.utils.deps import get_current_user
 from app.config import settings
 from app.services.drive import list_drive_files, download_drive_file
 from app.services.extractor import extract_text
@@ -47,26 +47,18 @@ def google_callback(request: Request, code: str, db: Session = Depends(get_db), 
 
 @router.get("/drive/files")
 def drive_files(current_user: User = Depends(get_current_user)):
-    """List Google Drive files using Clerk's Google OAuth token"""
-    from app.config import settings
-    from app.utils.deps import get_google_drive_service_from_clerk
+    """List Google Drive files using stored OAuth tokens"""
+    from app.services.drive import get_drive_service
     
-    # Try to get Google Drive service from Clerk using OAuth tokens
-    drive_service = None
-    if hasattr(current_user, '_clerk_data'):
-        clerk_user_id = current_user._clerk_data.get('user_id')
-        drive_service = get_google_drive_service_from_clerk(clerk_user_id, settings.CLERK_SECRET_KEY)
+    # Check if user has connected Google Drive
+    if not current_user.google_refresh_token:
+        raise HTTPException(400, "Google Drive not connected. Please connect your Google Drive using the Connect button.")
     
-    # Fallback to stored tokens if Clerk method fails
-    if not drive_service and current_user.google_refresh_token:
-        from app.services.drive import get_drive_service
-        drive_service = get_drive_service({
-            "token": current_user.google_token,
-            "refresh_token": current_user.google_refresh_token
-        })
-    
-    if not drive_service:
-        raise HTTPException(400, "Google Drive not connected. Please sign in with Google or connect your Google Drive.")
+    # Get Google Drive service using stored tokens
+    drive_service = get_drive_service({
+        "token": current_user.google_token,
+        "refresh_token": current_user.google_refresh_token
+    })
     
     try:
         # List files from Google Drive
@@ -82,20 +74,18 @@ def drive_files(current_user: User = Depends(get_current_user)):
 
 @router.post("/sync/drive/{file_id}")
 def sync_drive_file(file_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Sync a file from Google Drive"""
-    # Try to get Google Drive service from Clerk
-    drive_service = get_google_drive_service_from_clerk(current_user.__dict__)
+    """Sync a file from Google Drive using stored OAuth tokens"""
+    from app.services.drive import get_drive_service
     
-    # Fallback to stored tokens
-    if not drive_service and current_user.google_refresh_token:
-        from app.services.drive import get_drive_service
-        drive_service = get_drive_service({
-            "token": current_user.google_token,
-            "refresh_token": current_user.google_refresh_token
-        })
+    # Check if user has connected Google Drive
+    if not current_user.google_refresh_token:
+        raise HTTPException(400, "Google Drive not connected. Please connect your Google Drive first.")
     
-    if not drive_service:
-        raise HTTPException(400, "Google Drive not connected")
+    # Get Google Drive service using stored tokens
+    drive_service = get_drive_service({
+        "token": current_user.google_token,
+        "refresh_token": current_user.google_refresh_token
+    })
     
     try:
         # Get file metadata
