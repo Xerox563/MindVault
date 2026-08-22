@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV /home/amit/Downloads/Old/Stuff/Grind/MindVault/mindvault-backend/venv
+set -gx VIRTUAL_ENV /home/amit/Downloads/Old/Stuff/Grind/MindVault/backend/venv
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH
