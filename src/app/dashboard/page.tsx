@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, useUser, SignOutButton } from "@clerk/nextjs";
-import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { 
@@ -17,19 +17,27 @@ import {
   ChevronRight,
   Search,
   User,
-  MessageCircle,
   Plus,
   Settings,
   MoreHorizontal,
-  Download,
+  MessageCircle,
+  Mic,
+  ChevronDown,
   ExternalLink,
-  Zap,
-  Shield,
+  Database,
+  Check,
   Cpu,
-  LayoutGrid,
+  HardDrive,
+  Zap,
+  Globe,
   FolderOpen,
-  Clock,
-  TrendingUp
+  FileSpreadsheet,
+  FileIcon,
+  ScrollText,
+  Trash,
+  ChevronLeft,
+  ChevronUp,
+  ChevronLeft as ChevronLeftIcon
 } from "lucide-react";
 import { AnimatedBackground, GradientText } from "@/components/animations";
 
@@ -41,6 +49,7 @@ interface FileItem {
   file_type: string;
   file_size: number;
   source?: string;
+  uploaded_at?: string;
 }
 
 interface DriveFile {
@@ -53,103 +62,93 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  sources?: string[];
+  sources?: Source[];
 }
 
-// Custom hook for mouse position
-function useMousePosition() {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  
-  useEffect(() => {
-    const updateMousePosition = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener("mousemove", updateMousePosition);
-    return () => window.removeEventListener("mousemove", updateMousePosition);
-  }, []);
-  
-  return mousePosition;
+interface Source {
+  filename: string;
+  page?: string;
+  file_id?: number;
 }
 
-// Glowing Button Component
-const GlowingButton = ({ children, onClick, className = "", disabled = false }: any) => (
-  <motion.button
-    onClick={onClick}
-    disabled={disabled}
-    className={`relative group ${className}`}
-    whileHover={{ scale: disabled ? 1 : 1.02 }}
-    whileTap={{ scale: disabled ? 1 : 0.98 }}
-  >
-    <div className="absolute -inset-1 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-    <div className="relative">
-      {children}
-    </div>
-  </motion.button>
-);
+interface Model {
+  id: string;
+  name: string;
+  provider: string;
+  type: "cloud" | "local";
+  recommended?: boolean;
+  icon: string;
+}
 
-// Glass Card Component
-const GlassCard = ({ children, className = "" }: any) => (
-  <motion.div
-    className={`relative overflow-hidden ${className}`}
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.5 }}
-  >
-    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-white/5 rounded-2xl backdrop-blur-xl border border-white/20" />
-    <div className="relative z-10">
-      {children}
-    </div>
-  </motion.div>
-);
+const MODELS: Model[] = [
+  { id: "claude-3-5-sonnet", name: "Claude 3.5 Sonnet", provider: "Anthropic", type: "cloud", recommended: true, icon: "claude" },
+  { id: "claude-3-opus", name: "Claude 3 Opus", provider: "Anthropic", type: "cloud", icon: "claude" },
+  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", type: "cloud", icon: "openai" },
+  { id: "gpt-4-turbo", name: "GPT-4 Turbo", provider: "OpenAI", type: "cloud", icon: "openai" },
+  { id: "mistral-large", name: "Mistral Large 2", provider: "Mistral AI", type: "cloud", icon: "mistral" },
+  { id: "gemini-1-5", name: "Gemini 1.5 Pro", provider: "Google", type: "cloud", icon: "gemini" },
+  { id: "ollama-llama3", name: "Llama 3.2", provider: "Ollama", type: "local", icon: "ollama" },
+  { id: "ollama-llama3-70b", name: "Llama 3.1 70B", provider: "Ollama", type: "local", icon: "ollama" },
+];
 
-// Animated Background Orb
-const FloatingOrb = ({ delay = 0, size = 300, color = "violet" }: any) => (
-  <motion.div
-    className="absolute rounded-full pointer-events-none"
-    style={{
-      width: size,
-      height: size,
-      background: `radial-gradient(circle, ${color === 'violet' ? 'rgba(139, 92, 246, 0.3)' : color === 'cyan' ? 'rgba(6, 182, 212, 0.3)' : 'rgba(245, 158, 11, 0.2)'} 0%, transparent 70%)`,
-      filter: "blur(60px)",
-    }}
-    animate={{
-      x: [0, 30, 0],
-      y: [0, -30, 0],
-      scale: [1, 1.1, 1],
-    }}
-    transition={{
-      duration: 8,
-      repeat: Infinity,
-      ease: "easeInOut",
-      delay,
-    }}
-  />
-);
+const INTEGRATIONS = [
+  { id: "drive", name: "Google Drive", description: "Search and access your Drive files.", icon: "drive" },
+  { id: "dropbox", name: "Dropbox", description: "Search and access your Dropbox files.", icon: "dropbox" },
+  { id: "notion", name: "Notion", description: "Search pages and databases.", icon: "notion" },
+  { id: "onedrive", name: "Microsoft OneDrive", description: "Search and access your OneDrive files.", icon: "onedrive" },
+  { id: "confluence", name: "Confluence", description: "Search Confluence pages and spaces.", icon: "confluence" },
+  { id: "web", name: "Web (URL)", description: "Add URLs to use as context.", icon: "web" },
+];
+
+// File type icons
+const FileTypeIcon = ({ type, className = "" }: { type: string; className?: string }) => {
+  const colorClass = type.includes('pdf') ? 'text-red-400' :
+    type.includes('word') || type.includes('doc') ? 'text-blue-400' :
+    type.includes('excel') || type.includes('xlsx') || type.includes('csv') ? 'text-green-400' :
+    type.includes('md') ? 'text-gray-400' :
+    'text-gray-400';
+  
+  if (type.includes('pdf')) return <FileText className={`${className} ${colorClass}`} />;
+  if (type.includes('xlsx') || type.includes('csv')) return <FileSpreadsheet className={`${className} ${colorClass}`} />;
+  if (type.includes('doc') || type.includes('docx')) return <ScrollText className={`${className} ${colorClass}`} />;
+  return <FileIcon className={`${className} ${colorClass}`} />;
+};
+
+// Format file size
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return "0 KB";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+};
+
+// Format date
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return "Aug 22";
+  const date = new Date(dateStr);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[date.getMonth()]} ${date.getDate()}`;
+};
 
 export default function Dashboard() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
-  const mousePosition = useMousePosition();
-  const containerRef = useRef<HTMLDivElement>(null);
-  
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [uploading, setUploading] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [viewing, setViewing] = useState<{ content: string; fileType: string; filename: string } | null>(null);
-  const [showDrive, setShowDrive] = useState(false);
-  const [isChatLoading, setIsChatLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [dragActive, setDragActive] = useState(false);
-  const [activeTab, setActiveTab] = useState("chat");
-  const [isHoveringUpload, setIsHoveringUpload] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<Model>(MODELS[0]);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [storageUsed, setStorageUsed] = useState(2.4);
+  const [storageTotal] = useState(10);
+  const [showAllFiles, setShowAllFiles] = useState(false);
+  const [connectedSources, setConnectedSources] = useState<string[]>(["files"]);
 
-  const { scrollYProgress } = useScroll({ container: containerRef });
-  const headerOpacity = useTransform(scrollYProgress, [0, 0.1], [0, 1]);
-
-  // Check auth and fetch files
   useEffect(() => {
     if (isLoaded && isSignedIn) {
       fetchFiles();
@@ -169,31 +168,15 @@ export default function Dashboard() {
       const res = await fetch(`${API_URL}/api/files`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setFiles(await res.json());
-    } catch (error) {
-      console.error("Failed to fetch files:", error);
-    }
-  };
-
-  const fetchDriveFiles = async () => {
-    const token = await getAuthToken();
-    if (!token) return;
-    
-    try {
-      const res = await fetch(`${API_URL}/api/drive/files`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
       if (res.ok) {
-        setDriveFiles(await res.json());
-        setShowDrive(true);
-      } else if (res.status === 400) {
         const data = await res.json();
-        if (data.detail?.includes("not connected")) {
-          window.open(`${API_URL}/api/auth/google/connect`, "_blank", "width=500,height=600");
-        }
+        setFiles(data);
+        // Calculate storage used
+        const totalBytes = data.reduce((sum: number, f: FileItem) => sum + (f.file_size || 0), 0);
+        setStorageUsed(totalBytes / (1024 * 1024 * 1024)); // Convert to GB
       }
     } catch (error) {
-      console.error("Failed to fetch drive files:", error);
+      console.error("Failed to fetch files:", error);
     }
   };
 
@@ -202,13 +185,8 @@ export default function Dashboard() {
     if (!token) return;
     
     setUploading(file.name);
-    setUploadProgress(0);
     const formData = new FormData();
-    formData.append("uploaded_file", file);  // Changed from "file" to "uploaded_file" to match backend
-    
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => Math.min(prev + 10, 90));
-    }, 200);
+    formData.append("uploaded_file", file);
     
     try {
       const res = await fetch(`${API_URL}/api/upload`, {
@@ -216,62 +194,18 @@ export default function Dashboard() {
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      clearInterval(progressInterval);
-      
-      console.log("Upload response status:", res.status);
-      
       if (res.ok) {
-        setUploadProgress(100);
         fetchFiles();
-      } else {
-        const errorData = await res.json();
-        console.error("Upload failed:", errorData);
-        alert(`Upload failed: ${errorData.detail || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("Upload failed. Check console for details.");
     } finally {
-      setTimeout(() => {
-        setUploading(null);
-        setUploadProgress(0);
-      }, 1000);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    const token = await getAuthToken();
-    if (!token) return;
-    
-    try {
-      await fetch(`${API_URL}/api/files/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      fetchFiles();
-    } catch (error) {
-      console.error("Delete failed:", error);
-    }
-  };
-
-  const handleView = async (id: number) => {
-    const token = await getAuthToken();
-    if (!token) return;
-    
-    try {
-      const res = await fetch(`${API_URL}/api/files/${id}/content`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) setViewing(await res.json());
-    } catch (error) {
-      console.error("Failed to view file:", error);
+      setUploading(null);
     }
   };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
-    const token = await getAuthToken();
-    if (!token) return;
     
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -281,9 +215,10 @@ export default function Dashboard() {
     
     setMessages((prev) => [...prev, userMessage]);
     setInputMessage("");
-    setIsChatLoading(true);
+    setIsLoading(true);
 
     try {
+      const token = await getAuthToken();
       const res = await fetch(`${API_URL}/api/ask`, {
         method: "POST",
         headers: {
@@ -306,501 +241,495 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Chat failed:", error);
     } finally {
-      setIsChatLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      // Validate file type
-      const validTypes = ['.pdf', '.docx', '.xlsx', '.txt'];
-      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-      if (validTypes.includes(ext)) {
-        handleUpload(file);
-      } else {
-        alert(`Invalid file type. Allowed: ${validTypes.join(', ')}`);
-      }
-    }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
+  const SUGGESTED_PROMPTS = [
+    "Summarize my documents",
+    "What are the key points?",
+    "Find information about...",
+    "Compare these documents",
+  ];
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="relative">
-          <motion.div
-            className="w-16 h-16 rounded-full border-4 border-violet-500/20 border-t-violet-500"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          />
-          <motion.div
-            className="absolute inset-0 rounded-full bg-violet-500/20 blur-xl"
-            animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-        </div>
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!isSignedIn) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <Brain className="w-20 h-20 text-violet-500 mx-auto mb-6" />
-          <p className="text-white text-xl mb-4">Please sign in to access the dashboard</p>
-          <Link href="/login">
-            <GlowingButton className="px-8 py-4 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-xl text-white font-semibold">
-              Sign In
-            </GlowingButton>
-          </Link>
-        </motion.div>
+      <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center">
+        <p className="text-white mb-4">Please sign in to access the dashboard</p>
+        <Link href="/login">
+          <button className="px-6 py-3 bg-purple-600 rounded-lg text-white font-medium hover:bg-purple-700">
+            Sign In
+          </button>
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white overflow-hidden relative" ref={containerRef}>
-      {/* Animated Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <AnimatedBackground />
-        <FloatingOrb delay={0} size={400} color="violet" className="top-20 left-10" />
-        <FloatingOrb delay={2} size={300} color="cyan" className="bottom-20 right-10" />
-        <FloatingOrb delay={4} size={350} color="amber" className="top-1/2 left-1/3" />
-      </div>
-      
-      {/* Spotlight Effect */}
-      <div 
-        className="fixed inset-0 pointer-events-none z-0"
-        style={{
-          background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(139, 92, 246, 0.1), transparent 40%)`,
-        }}
-      />
-
-      {/* Header */}
-      <motion.header 
-        className="fixed top-0 left-0 right-0 z-50 px-6 py-4"
-        style={{ opacity: headerOpacity }}
-      >
-        <div className="max-w-7xl mx-auto">
-          <GlassCard className="px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <motion.button
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="p-2 rounded-xl hover:bg-white/10 transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Menu className="w-5 h-5" />
-                </motion.button>
-                <Link href="/" className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
-                      <Brain className="w-6 h-6 text-white" />
-                    </div>
-                    <motion.div
-                      className="absolute -inset-1 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-xl blur opacity-50"
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    />
-                  </div>
-                  <span className="font-bold text-xl">
-                    <GradientText>MindVault</GradientText>
-                  </span>
-                </Link>
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <GlowingButton 
-                  onClick={() => setActiveTab("chat")}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl ${activeTab === "chat" ? "bg-white/20" : ""}`}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span className="text-sm">Chat</span>
-                </GlowingButton>
-                
-                <GlowingButton 
-                  onClick={() => setActiveTab("files")}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl ${activeTab === "files" ? "bg-white/20" : ""}`}
-                >
-                  <FolderOpen className="w-4 h-4" />
-                  <span className="text-sm">Files</span>
-                </GlowingButton>
-                
-                <div className="flex items-center gap-3 pl-4 border-l border-white/10">
-                  {user?.imageUrl ? (
-                    <motion.img
-                      src={user.imageUrl}
-                      alt={user.firstName || "User"}
-                      className="w-10 h-10 rounded-full border-2 border-violet-500/50"
-                      whileHover={{ scale: 1.1 }}
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
-                      <User className="w-5 h-5" />
-                    </div>
-                  )}
-                  <SignOutButton>
-                    <motion.button
-                      className="p-2 rounded-xl hover:bg-red-500/20 text-red-400 transition-colors"
-                      whileHover={{ scale: 1.05 }}
-                    >
-                      <LogOut className="w-5 h-5" />
-                    </motion.button>
-                  </SignOutButton>
+    <div className="min-h-screen bg-[#0d0d0d] text-white flex">
+      {/* Left Sidebar - Files Only */}
+      <AnimatePresence mode="wait">
+        {sidebarOpen && (
+          <motion.aside
+            initial={{ x: -280, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -280, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="w-[280px] border-r border-white/10 flex flex-col h-screen bg-[#0d0d0d]"
+          >
+            {/* Logo */}
+            <div className="p-4 border-b border-white/10">
+              <Link href="/" className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                  <Brain className="w-5 h-5 text-white" />
                 </div>
-              </div>
+                <span className="font-semibold text-lg">MindVault</span>
+              </Link>
             </div>
-          </GlassCard>
-        </div>
-      </motion.header>
 
-      <div className="flex pt-24 h-screen">
-        {/* Sidebar */}
-        <AnimatePresence mode="wait">
-          {sidebarOpen && (
-            <motion.aside
-              initial={{ x: -320, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -320, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="w-80 flex flex-col gap-6 p-6 overflow-y-auto"
-            >
-              {/* Upload Zone */}
-              <motion.div
-                className="relative"
-                onMouseEnter={() => setIsHoveringUpload(true)}
-                onMouseLeave={() => setIsHoveringUpload(false)}
-              >
-                <motion.div
-                  className={`absolute -inset-1 rounded-2xl bg-gradient-to-r from-violet-500 to-cyan-500 opacity-20 blur transition-opacity ${isHoveringUpload ? "opacity-40" : ""}`}
+            <div className="flex-1 overflow-y-auto p-4">
+              {/* Upload Button */}
+              <label className="block w-full">
+                <input
+                  type="file"
+                  onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])}
+                  className="hidden"
+                  accept=".pdf,.docx,.txt,.csv,.xlsx,.md"
                 />
-                <div 
-                  className={`relative p-8 rounded-2xl border-2 border-dashed transition-all duration-300 ${
-                    dragActive 
-                      ? "border-violet-500 bg-violet-500/10 scale-[1.02]" 
-                      : "border-white/20 hover:border-violet-500/50 bg-white/5"
-                  }`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg flex items-center justify-center gap-2 cursor-pointer mb-2"
                 >
-                  <input
-                    type="file"
-                    onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept=".pdf,.docx,.xlsx,.txt"
-                  />
-                  <div className="text-center">
-                    <motion.div
-                      className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-4"
-                      animate={{ y: isHoveringUpload ? -5 : 0 }}
-                      transition={{ type: "spring" }}
-                    >
-                      <Plus className="w-8 h-8 text-violet-400" />
-                    </motion.div>
-                    <p className="text-sm text-gray-400">
-                      Drop files or click to upload
-                    </p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      PDF, DOCX, XLSX, TXT
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
+                  <Upload className="w-4 h-4" />
+                  <span className="font-medium">Upload Files</span>
+                </motion.div>
+              </label>
 
-              {/* Upload Progress */}
-              <AnimatePresence>
-                {uploading && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                  >
-                    <GlassCard className="p-4">
-                      <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="text-gray-400 truncate">{uploading}</span>
-                        <span className="text-violet-400 font-mono">{uploadProgress}%</span>
-                      </div>
-                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                        <motion.div
-                          className="h-full bg-gradient-to-r from-violet-500 to-cyan-500 rounded-full"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${uploadProgress}%` }}
-                          transition={{ duration: 0.3 }}
-                        />
-                      </div>
-                    </GlassCard>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Supported Types */}
+              <p className="text-xs text-gray-500 text-center mb-6">
+                PDF, DOCX, TXT, CSV up to 50MB
+              </p>
+
+              {/* Search */}
+              <div className="relative mb-6">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search files"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                />
+              </div>
+
+              {/* Your Files Header */}
+              <div className="mb-4">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Your Files</h3>
+                <p className="text-xs text-gray-500">{files.length} files available to AI</p>
+              </div>
 
               {/* Files List */}
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
-                    <FolderOpen className="w-4 h-4" />
-                    Your Files
-                  </h3>
-                  <motion.span 
-                    className="text-xs bg-violet-500/20 text-violet-300 px-2 py-1 rounded-full"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    key={files.length}
-                  >
-                    {files.length}
-                  </motion.span>
-                </div>
-                
-                <div className="space-y-3">
-                  {files.length === 0 ? (
-                    <motion.div 
-                      className="text-center py-8 text-gray-600"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <FileText className="w-10 h-8 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">No files yet</p>
-                      <p className="text-xs mt-1">Upload your first document</p>
-                    </motion.div>
-                  ) : (
-                    files.map((file, index) => (
-                      <motion.div
-                        key={file.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="group relative p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/30 transition-all cursor-pointer"
-                        whileHover={{ x: 5 }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <motion.div 
-                            className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              file.file_type.includes('pdf') ? 'bg-red-500/20 text-red-400' :
-                              file.file_type.includes('word') || file.file_type.includes('doc') ? 'bg-blue-500/20 text-blue-400' :
-                              file.file_type.includes('excel') || file.file_type.includes('sheet') ? 'bg-green-500/20 text-green-400' :
-                              'bg-gray-500/20 text-gray-400'
-                            }`}
-                            whileHover={{ rotate: 5, scale: 1.1 }}
-                          >
-                            <FileText className="w-5 h-5" />
-                          </motion.div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate group-hover:text-violet-300 transition-colors">{file.filename}</p>
-                            <p className="text-xs text-gray-500">{formatFileSize(file.file_size)}</p>
-                          </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <motion.button
-                              onClick={(e) => { e.stopPropagation(); handleView(file.id); }}
-                              className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white"
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                            >
-                              <Search className="w-4 h-4" />
-                            </motion.button>
-                            <motion.button
-                              onClick={(e) => { e.stopPropagation(); handleDelete(file.id); }}
-                              className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400"
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </motion.button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Google Drive Button */}
-              <GlowingButton 
-                onClick={fetchDriveFiles}
-                className="w-full py-4 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-xl flex items-center justify-center gap-2 text-blue-300"
-              >
-                <Cloud className="w-5 h-5" />
-                <span className="font-medium">Google Drive</span>
-              </GlowingButton>
-            </motion.aside>
-          )}
-        </AnimatePresence>
-
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col min-w-0 p-6">
-          {activeTab === "chat" ? (
-            <div className="flex-1 flex flex-col">
-              {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto space-y-6 mb-6">
-                {messages.length === 0 ? (
-                  <motion.div 
-                    className="h-full flex flex-col items-center justify-center text-center"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                  >
-                    <div className="relative mb-8">
-                      <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center">
-                        <Sparkles className="w-12 h-12 text-violet-400" />
-                      </div>
-                      <motion.div
-                        className="absolute -inset-2 rounded-2xl bg-gradient-to-r from-violet-500/20 to-cyan-500/20 blur-xl"
-                        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
-                        transition={{ duration: 3, repeat: Infinity }}
-                      />
-                    </div>
-                    <h3 className="text-3xl font-bold mb-4 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                      Welcome to MindVault
-                    </h3>
-                    <p className="text-gray-400 max-w-md mb-8 text-lg">
-                      Upload documents and ask questions about them. Our AI will search through your files and provide accurate answers with sources.
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-3">
-                      {["What are my documents about?", "Summarize key points", "Find specific information"].map((suggestion, i) => (
-                        <motion.button
-                          key={suggestion}
-                          onClick={() => setInputMessage(suggestion)}
-                          className="px-6 py-3 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 hover:border-violet-500/50 transition-all"
-                          whileHover={{ scale: 1.05, y: -2 }}
-                          whileTap={{ scale: 0.95 }}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.1 }}
-                        >
-                          {suggestion}
-                        </motion.button>
-                      ))}
-                    </div>
-                  </motion.div>
-                ) : (
-                  messages.map((message, index) => (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div className={`max-w-[80%] ${message.role === "user" ? "items-end" : "items-start"}`}>
-                        <motion.div 
-                          className={`p-5 rounded-2xl relative ${
-                            message.role === "user" 
-                              ? "bg-gradient-to-r from-violet-500 to-cyan-500 text-white" 
-                              : "bg-white/10 border border-white/20"
-                          }`}
-                          whileHover={{ scale: 1.01 }}
-                        >
-                          <p className="leading-relaxed">{message.content}</p>
-                        </motion.div>
-                        {message.sources && message.sources.length > 0 && (
-                          <motion.div 
-                            className="mt-3 flex flex-wrap gap-2"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.2 }}
-                          >
-                            {message.sources.map((source, i) => (
-                              <span 
-                                key={i} 
-                                className="text-xs px-3 py-1.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30"
-                              >
-                                <Zap className="w-3 h-3 inline mr-1" />
-                                {source}
-                              </span>
-                            ))}
-                          </motion.div>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))
-                )}
-                
-                {isChatLoading && (
+              <div className="space-y-1 mb-4">
+                {(showAllFiles ? files : files.slice(0, 8)).map((file) => (
                   <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex justify-start"
+                    key={file.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="group flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer"
                   >
-                    <div className="bg-white/10 border border-white/20 p-5 rounded-2xl flex items-center gap-4">
-                      {[0, 1, 2].map((i) => (
-                        <motion.div
-                          key={i}
-                          className="w-3 h-3 rounded-full bg-gradient-to-r from-violet-400 to-cyan-400"
-                          animate={{ 
-                            scale: [1, 1.5, 1],
-                            opacity: [0.5, 1, 0.5]
-                          }}
-                          transition={{ 
-                            duration: 0.6, 
-                            repeat: Infinity, 
-                            delay: i * 0.15 
-                          }}
-                        />
-                      ))}
+                    <FileTypeIcon type={file.file_type} className="w-5 h-5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{file.filename}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(file.file_size)} • {formatDate(file.uploaded_at)}
+                      </p>
                     </div>
+                    <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded">
+                      <MoreHorizontal className="w-4 h-4 text-gray-400" />
+                    </button>
                   </motion.div>
-                )}
+                ))}
               </div>
 
-              {/* Chat Input */}
-              <GlassCard className="p-2">
-                <div className="relative">
+              {/* View All Files */}
+              {files.length > 8 && (
+                <button
+                  onClick={() => setShowAllFiles(!showAllFiles)}
+                  className="flex items-center gap-1 text-sm text-gray-400 hover:text-white mb-6"
+                >
+                  {showAllFiles ? (
+                    <>
+                      <ChevronUp className="w-4 h-4" />
+                      Show less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronRight className="w-4 h-4" />
+                      View all files
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* Storage Indicator */}
+            <div className="p-4 border-t border-white/10">
+              <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                <span>Storage used</span>
+                <span>{storageUsed.toFixed(1)} GB of {storageTotal} GB</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full"
+                  style={{ width: `${(storageUsed / storageTotal) * 100}%` }}
+                />
+              </div>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Header */}
+        <header className="h-14 border-b border-white/10 flex items-center justify-between px-4 bg-[#0d0d0d]/80 backdrop-blur-md">
+          <div className="flex items-center gap-4">
+            <motion.button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Menu className="w-5 h-5" />
+            </motion.button>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-400">Free plan</span>
+            <button className="px-3 py-1.5 text-sm border border-orange-500/50 text-orange-400 rounded-lg hover:bg-orange-500/10">
+              Upgrade
+            </button>
+            <button className="p-2 hover:bg-white/10 rounded-lg">
+              <span className="sr-only">Notifications</span>
+              <div className="w-5 h-5 bg-white/10 rounded-full" />
+            </button>
+            <SignOutButton>
+              <button className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-sm font-medium">
+                A
+              </button>
+            </SignOutButton>
+          </div>
+        </header>
+
+        {/* Chat Area */}
+        <main className="flex-1 flex flex-col overflow-hidden relative">
+          {messages.length === 0 ? (
+            /* Welcome Screen */
+            <div className="flex-1 flex flex-col items-center justify-center px-4">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center max-w-2xl"
+              >
+                <div className="flex items-center justify-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                    <Brain className="w-7 h-7 text-white" />
+                  </div>
+                  <h1 className="text-4xl font-light text-white">
+                    It&apos;s a late-night jam session.
+                  </h1>
+                </div>
+                <p className="text-xl text-gray-400 mb-8">
+                  How can I help you today?
+                </p>
+
+                {/* Suggested Prompts */}
+                <div className="grid grid-cols-2 gap-3 mb-12 max-w-lg mx-auto">
+                  {SUGGESTED_PROMPTS.map((prompt) => (
+                    <motion.button
+                      key={prompt}
+                      onClick={() => setInputMessage(prompt)}
+                      className="p-4 text-left bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-purple-500/30 transition-all group"
+                      whileHover={{ y: -2 }}
+                    >
+                      <p className="text-sm text-gray-300 group-hover:text-white">{prompt}</p>
+                    </motion.button>
+                  ))}
+                </div>
+              </motion.div>
+            </div>
+          ) : (
+            /* Chat Messages */
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+              {messages.map((message) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div className={`max-w-3xl ${message.role === "user" ? "items-end" : "items-start"}`}>
+                    <div className={`p-4 rounded-2xl ${
+                      message.role === "user" 
+                        ? "bg-white/10 border border-white/10" 
+                        : "bg-transparent"
+                    }`}>
+                      <p className="text-white leading-relaxed">{message.content}</p>
+                    </div>
+                    {message.sources && message.sources.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs text-gray-500 mb-2">Sources</p>
+                        {message.sources.map((source, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            className="flex items-center gap-2 p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 cursor-pointer"
+                          >
+                            <FileText className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-gray-300">{source.filename}</span>
+                            {source.page && (
+                              <span className="text-xs text-gray-500 ml-auto">{source.page}</span>
+                            )}
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+              {isLoading && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex justify-start"
+                >
+                  <div className="flex items-center gap-2 p-4">
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100" />
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200" />
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          )}
+
+          {/* Prompt Bar */}
+          <div className="p-4">
+            <div className="max-w-3xl mx-auto">
+              <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-2">
+                <div className="flex items-center gap-2">
+                  {/* + Button for Integrations */}
+                  <motion.button
+                    onClick={() => setShowIntegrations(true)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 rounded-xl hover:bg-white/10 text-gray-400"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </motion.button>
+
+                  {/* Input */}
                   <input
                     type="text"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                    placeholder="Ask about your documents..."
-                    className="w-full bg-transparent pl-6 pr-16 py-5 text-white placeholder-gray-500 focus:outline-none text-lg"
+                    placeholder="How can I help you today?"
+                    className="flex-1 bg-transparent px-3 py-3 text-white placeholder-gray-500 focus:outline-none"
                   />
+
+                  {/* Mic Button */}
+                  <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white">
+                    <Mic className="w-4 h-4" />
+                  </button>
+
+                  {/* Model Selector */}
                   <motion.button
-                    onClick={handleSendMessage}
-                    disabled={!inputMessage.trim() || isChatLoading}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 flex items-center justify-center disabled:opacity-50"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowModelSelector(true)}
+                    whileHover={{ scale: 1.02 }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white border border-white/10 rounded-xl"
                   >
-                    <ChevronRight className="w-6 h-6" />
+                    {selectedModel.name}
+                    <ChevronDown className="w-3 h-3" />
                   </motion.button>
                 </div>
-              </GlassCard>
+
+                {/* Tabs */}
+                <div className="flex items-center gap-1 px-2 pb-2">
+                  <button className="px-3 py-1.5 text-sm bg-white/10 text-white rounded-lg">
+                    Chat
+                  </button>
+                  <button className="px-3 py-1.5 text-sm text-gray-500 hover:text-white rounded-lg">
+                    Research
+                    <span className="ml-1 text-xs text-orange-400">BETA</span>
+                  </button>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold mb-6">Files</h2>
-              {/* Files grid view would go here */}
-            </div>
-          )}
+          </div>
         </main>
       </div>
+
+      {/* Model Selector Dialog */}
+      <AnimatePresence>
+        {showModelSelector && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowModelSelector(false)}
+              className="fixed inset-0 bg-black/50 z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="fixed right-4 bottom-24 w-[400px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"
+            >
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <h3 className="font-semibold">Choose a model</h3>
+                <button onClick={() => setShowModelSelector(false)}>
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              </div>
+              
+              <div className="p-4 max-h-[500px] overflow-y-auto">
+                {/* Cloud Models */}
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Cloud models</p>
+                <div className="space-y-1 mb-6">
+                  {MODELS.filter(m => m.type === "cloud").map((model) => (
+                    <button
+                      key={model.id}
+                      onClick={() => { setSelectedModel(model); setShowModelSelector(false); }}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
+                        selectedModel.id === model.id ? "bg-white/10" : "hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                        <Cpu className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{model.name}</span>
+                          {model.recommended && (
+                            <span className="text-xs text-orange-400 border border-orange-400/50 px-1.5 py-0.5 rounded">
+                              Recommended
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">{model.provider}</p>
+                      </div>
+                      {selectedModel.id === model.id && (
+                        <Check className="w-4 h-4 text-purple-400" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Local Models */}
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Local models</p>
+                <div className="space-y-1">
+                  {MODELS.filter(m => m.type === "local").map((model) => (
+                    <button
+                      key={model.id}
+                      onClick={() => { setSelectedModel(model); setShowModelSelector(false); }}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
+                        selectedModel.id === model.id ? "bg-white/10" : "hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                        <HardDrive className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <span className="font-medium">{model.name}</span>
+                        <p className="text-xs text-gray-500">{model.provider}</p>
+                      </div>
+                      <span className="text-xs text-gray-500 bg-white/10 px-2 py-1 rounded">Local</span>
+                      {selectedModel.id === model.id && (
+                        <Check className="w-4 h-4 text-purple-400" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* View all models */}
+                <button className="w-full flex items-center justify-between p-3 text-sm text-gray-400 hover:text-white mt-4">
+                  View all models
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Integrations Dialog */}
+      <AnimatePresence>
+        {showIntegrations && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowIntegrations(false)}
+              className="fixed inset-0 bg-black/50 z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"
+            >
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">Add integration</h3>
+                  <p className="text-sm text-gray-500">Connect your tools and bring your data into MindVault.</p>
+                </div>
+                <button onClick={() => setShowIntegrations(false)}>
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              </div>
+              
+              <div className="p-4 max-h-[400px] overflow-y-auto">
+                <div className="space-y-2">
+                  {INTEGRATIONS.map((integration) => (
+                    <div
+                      key={integration.id}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 group"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+                        {integration.icon === "drive" && <Cloud className="w-5 h-5 text-blue-400" />}
+                        {integration.icon === "dropbox" && <Cloud className="w-5 h-5 text-blue-400" />}
+                        {integration.icon === "notion" && <FileText className="w-5 h-5 text-gray-400" />}
+                        {integration.icon === "onedrive" && <Cloud className="w-5 h-5 text-blue-400" />}
+                        {integration.icon === "confluence" && <Globe className="w-5 h-5 text-blue-400" />}
+                        {integration.icon === "web" && <Globe className="w-5 h-5 text-gray-400" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">{integration.name}</p>
+                        <p className="text-sm text-gray-500">{integration.description}</p>
+                      </div>
+                      <button className="px-4 py-1.5 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
+                        Connect
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Document Viewer Modal */}
       <AnimatePresence>
@@ -809,36 +738,30 @@ export default function Dashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
             onClick={() => setViewing(null)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-4xl max-h-[90vh] overflow-hidden"
+              className="w-full max-w-4xl max-h-[90vh] bg-[#1a1a1a] border border-white/10 rounded-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <GlassCard className="h-full">
-                <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-5 h-5 text-violet-400" />
-                    <span className="font-medium">{viewing.filename}</span>
-                  </div>
-                  <motion.button
-                    onClick={() => setViewing(null)}
-                    className="p-2 rounded-lg hover:bg-white/10"
-                    whileHover={{ scale: 1.1, rotate: 90 }}
-                  >
-                    <X className="w-5 h-5" />
-                  </motion.button>
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FileText className="w-5 h-5 text-purple-400" />
+                  <span className="font-medium">{viewing.filename}</span>
                 </div>
-                <div className="p-6 overflow-auto max-h-[70vh]">
-                  <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
-                    {viewing.content}
-                  </pre>
-                </div>
-              </GlassCard>
+                <button onClick={() => setViewing(null)}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 overflow-auto max-h-[70vh]">
+                <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
+                  {viewing.content}
+                </pre>
+              </div>
             </motion.div>
           </motion.div>
         )}
