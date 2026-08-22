@@ -1,6 +1,5 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from google_auth_oauthlib.flow import Flow
 from app.database import get_db
@@ -10,6 +9,7 @@ from app.config import settings
 from app.services.drive import list_drive_files, download_drive_file
 from app.services.extractor import extract_text
 from app.services.processor import process_file
+from app.services.user_settings import get_user_api_keys, base_provider
 from app.models.user import File as FileModel
 
 router = APIRouter(prefix="/api", tags=["google"])
@@ -28,54 +28,24 @@ def get_flow():
     )
 
 @router.get("/auth/google/connect")
-def connect_google(request: Request, db: Session = Depends(get_db)):
-    """Google OAuth connection - accepts token from query param for popup flow"""
-    # Get token from query parameter (for popup flow)
-    token = request.query_params.get('token')
-    
-    # Debug logging
-    print(f"Connect endpoint called")
-    print(f"Query params: {request.query_params}")
-    print(f"Token present: {bool(token)}")
-    print(f"Token length: {len(token) if token else 0}")
-    
-    if not token:
-        raise HTTPException(401, "No authentication token provided")
-    
-    # Verify token and get user
-    from app.utils.deps import verify_clerk_token
-    clerk_data = verify_clerk_token(token)
-    
-    if not clerk_data:
-        raise HTTPException(401, "Invalid token")
-    
-    # Find or create user
-    email = clerk_data.get('email') or f"{clerk_data['user_id']}@clerk.user"
-    user = db.query(User).filter(User.email == email).first()
-    
-    if not user:
-        import secrets
-        from app.utils.auth import hash_password
-        user = User(
-            email=email,
-            password_hash=hash_password(secrets.token_hex(32)),
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    
-    # Generate auth URL with user ID in state
+def connect_google(current_user: User = Depends(get_current_user)):
+    """Return a Google OAuth URL for the frontend to open in a popup.
+
+    Auth is handled the normal way (Authorization header via get_current_user);
+    the user id travels through the OAuth `state` param since the popup's
+    redirect back to /callback carries no auth header of its own.
+    """
     import json
     import base64
-    state = base64.urlsafe_b64encode(json.dumps({"user_id": user.id}).encode()).decode()
-    
+    state = base64.urlsafe_b64encode(json.dumps({"user_id": current_user.id}).encode()).decode()
+
     flow = get_flow()
     auth_url, _ = flow.authorization_url(
-        prompt="consent", 
+        prompt="consent",
         access_type="offline",
         state=state
     )
-    return RedirectResponse(url=auth_url)
+    return {"auth_url": auth_url}
 
 @router.get("/auth/google/callback")
 def google_callback(request: Request, code: str, state: str = None, db: Session = Depends(get_db)):
@@ -198,9 +168,24 @@ def sync_drive_file(file_id: str, db: Session = Depends(get_db), current_user: U
         if text:
             file_record.extracted_text = text
             db.commit()
-            process_file(db, file_record)
-        
+            provider_id = current_user.preferred_provider or settings.LLM_PROVIDER
+            api_key = get_user_api_keys(current_user).get(base_provider(provider_id))
+            process_file(db, file_record, provider_id=provider_id, api_key=api_key)
+
         return {"message": "File synced", "file_id": file_record.id}
     except Exception as e:
         print(f"Error syncing Drive file: {e}")
         raise HTTPException(500, f"Failed to sync file: {str(e)}")
+
+@router.get("/integrations")
+def list_integrations(current_user: User = Depends(get_current_user)):
+    """List available third-party integrations and whether the current user has connected them."""
+    return [
+        {
+            "id": "google_drive",
+            "name": "Google Drive",
+            "description": "Import files from your Google Drive into your knowledge base",
+            "icon": "drive",
+            "connected": bool(current_user.google_refresh_token),
+        }
+    ]

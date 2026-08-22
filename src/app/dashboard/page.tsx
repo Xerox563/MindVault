@@ -21,13 +21,18 @@ import {
   Check,
   Cpu,
   HardDrive,
-  Globe,
   FileSpreadsheet,
   FileIcon,
   ScrollText,
   ChevronUp,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Zap,
+  Settings,
+  Key,
+  Trash2,
+  RefreshCw,
+  Link2
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -53,19 +58,12 @@ interface Source {
   file_id?: number;
 }
 
-interface LLMModel {
+interface LLMProvider {
   id: string;
   name: string;
-  provider: string;
   type: "cloud" | "local";
-  available: boolean;
-}
-
-interface LLMStatus {
-  provider: string;
   model: string;
-  available_models?: string[];
-  ollama_connected?: boolean;
+  available: boolean;
 }
 
 interface Integration {
@@ -76,7 +74,22 @@ interface Integration {
   connected: boolean;
 }
 
-// File type icons
+interface ApiKeyStatus {
+  provider: string;
+  configured: boolean;
+  source: "user" | "server" | "none";
+}
+
+interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  mistral: "Mistral AI",
+};
+
 const FileTypeIcon = ({ type, className = "" }: { type: string; className?: string }) => {
   if (type.includes('pdf')) return <FileText className={`${className} text-red-400`} />;
   if (type.includes('xlsx') || type.includes('csv')) return <FileSpreadsheet className={`${className} text-green-400`} />;
@@ -114,18 +127,25 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
   
   // LLM State
-  const [llmStatus, setLlmStatus] = useState<LLMStatus | null>(null);
-  const [availableModels, setAvailableModels] = useState<LLMModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
+  const [providers, setProviders] = useState<LLMProvider[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<LLMProvider | null>(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(true);
   
   // Integrations State
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [showIntegrations, setShowIntegrations] = useState(false);
-  const [integrationsLoading, setIntegrationsLoading] = useState(true);
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
+  const [driveFilesLoading, setDriveFilesLoading] = useState(false);
+  const [syncingFileId, setSyncingFileId] = useState<string | null>(null);
+  const [connectingDrive, setConnectingDrive] = useState(false);
 
-  // Fetch data on mount
+  // Settings / API keys state
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKeys, setApiKeys] = useState<ApiKeyStatus[]>([]);
+  const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
+  const [savingProvider, setSavingProvider] = useState<string | null>(null);
+
   useEffect(() => {
     if (isLoaded && isSignedIn) {
       fetchFiles();
@@ -134,9 +154,17 @@ export default function Dashboard() {
     }
   }, [isLoaded, isSignedIn]);
 
-  const getAuthToken = async () => {
-    return await getToken();
-  };
+  useEffect(() => {
+    const handleDriveMessage = (event: MessageEvent) => {
+      if (event.data === "google-drive-connected") {
+        fetchIntegrations();
+      }
+    };
+    window.addEventListener("message", handleDriveMessage);
+    return () => window.removeEventListener("message", handleDriveMessage);
+  }, []);
+
+  const getAuthToken = async () => await getToken();
 
   const fetchFiles = async () => {
     const token = await getAuthToken();
@@ -166,38 +194,16 @@ export default function Dashboard() {
       });
       
       if (res.ok) {
-        const status: LLMStatus = await res.json();
-        setLlmStatus(status);
+        const data = await res.json();
+        const availableProviders = data.providers || [];
+        setProviders(availableProviders);
         
-        // Build available models list
-        const models: LLMModel[] = [];
-        
-        // Add current configured model
-        models.push({
-          id: status.provider + "-" + status.model,
-          name: status.provider === "mistral" ? "Mistral AI" : status.model,
-          provider: status.provider,
-          type: status.provider === "ollama" ? "local" : "cloud",
-          available: true
-        });
-        
-        // Add Ollama models if available
-        if (status.ollama_connected && status.available_models) {
-          status.available_models.forEach((modelName: string) => {
-            if (!models.find(m => m.name === modelName)) {
-              models.push({
-                id: "ollama-" + modelName,
-                name: modelName,
-                provider: "Ollama",
-                type: "local",
-                available: true
-              });
-            }
-          });
+        // Set default selected provider
+        if (availableProviders.length > 0) {
+          const defaultProvider = availableProviders.find((p: LLMProvider) => p.id === data.current_provider) 
+            || availableProviders[0];
+          setSelectedProvider(defaultProvider);
         }
-        
-        setAvailableModels(models);
-        setSelectedModel(models[0] || null);
       }
     } catch (error) {
       console.error("Failed to fetch LLM status:", error);
@@ -206,44 +212,185 @@ export default function Dashboard() {
     }
   };
 
-  const fetchIntegrations = async () => {
+  const setLLMProvider = async (providerId: string) => {
     const token = await getAuthToken();
     if (!token) return;
     
-    setIntegrationsLoading(true);
     try {
-      // Check which integrations are configured
-      const res = await fetch(`${API_URL}/api/drive/files`, {
+      const res = await fetch(`${API_URL}/api/llm/set-provider/${providerId}`, {
+        method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
       
-      // Build integrations list based on what's actually configured
-      const configuredIntegrations: Integration[] = [];
-      
-      // Check if Google Drive is configured
-      try {
-        const driveRes = await fetch(`${API_URL}/api/auth/google/connect`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (driveRes.ok || driveRes.status !== 404) {
-          configuredIntegrations.push({
-            id: "drive",
-            name: "Google Drive",
-            description: "Search and access your Drive files",
-            icon: "drive",
-            connected: false // Will be updated after OAuth
-          });
+      if (res.ok) {
+        // Update local state
+        const provider = providers.find(p => p.id === providerId);
+        if (provider) {
+          setSelectedProvider(provider);
         }
-      } catch {
-        // Drive not configured
       }
-      
-      setIntegrations(configuredIntegrations);
+    } catch (error) {
+      console.error("Failed to set provider:", error);
+    }
+  };
+
+  const fetchIntegrations = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/integrations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIntegrations(data);
+      }
     } catch (error) {
       console.error("Failed to fetch integrations:", error);
-      setIntegrations([]);
+    }
+  };
+
+  const fetchDriveFiles = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+
+    setDriveFilesLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/drive/files`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setDriveFiles(await res.json());
+      }
+    } catch (error) {
+      console.error("Failed to fetch Drive files:", error);
     } finally {
-      setIntegrationsLoading(false);
+      setDriveFilesLoading(false);
+    }
+  };
+
+  const connectGoogleDrive = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+
+    setConnectingDrive(true);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/google/connect`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.auth_url) {
+          window.open(data.auth_url, "google-drive-connect", "width=500,height=700");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to start Google Drive connection:", error);
+    } finally {
+      setConnectingDrive(false);
+    }
+  };
+
+  const syncDriveFile = async (fileId: string) => {
+    const token = await getAuthToken();
+    if (!token) return;
+
+    setSyncingFileId(fileId);
+    try {
+      const res = await fetch(`${API_URL}/api/sync/drive/${fileId}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        fetchFiles();
+      } else {
+        const error = await res.json();
+        alert(error.detail || "Failed to sync file");
+      }
+    } catch (error) {
+      console.error("Failed to sync Drive file:", error);
+    } finally {
+      setSyncingFileId(null);
+    }
+  };
+
+  const fetchApiKeys = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/settings/api-keys`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setApiKeys(await res.json());
+      }
+    } catch (error) {
+      console.error("Failed to fetch API keys:", error);
+    }
+  };
+
+  const saveApiKey = async (provider: string) => {
+    const token = await getAuthToken();
+    const apiKey = apiKeyInputs[provider]?.trim();
+    if (!token || !apiKey) return;
+
+    setSavingProvider(provider);
+    try {
+      const res = await fetch(`${API_URL}/api/settings/api-keys`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ provider, api_key: apiKey }),
+      });
+      if (res.ok) {
+        setApiKeyInputs((prev) => ({ ...prev, [provider]: "" }));
+        await fetchApiKeys();
+        await fetchLLMStatus();
+      } else {
+        const error = await res.json();
+        alert(error.detail || "Failed to save API key");
+      }
+    } catch (error) {
+      console.error("Failed to save API key:", error);
+    } finally {
+      setSavingProvider(null);
+    }
+  };
+
+  const removeApiKey = async (provider: string) => {
+    const token = await getAuthToken();
+    if (!token) return;
+
+    setSavingProvider(provider);
+    try {
+      const res = await fetch(`${API_URL}/api/settings/api-keys/${provider}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        await fetchApiKeys();
+        await fetchLLMStatus();
+      }
+    } catch (error) {
+      console.error("Failed to remove API key:", error);
+    } finally {
+      setSavingProvider(null);
+    }
+  };
+
+  const openSettings = () => {
+    setShowSettings(true);
+    fetchApiKeys();
+  };
+
+  const openIntegrations = () => {
+    setShowIntegrations(true);
+    if (integrations.find((i) => i.id === "google_drive")?.connected) {
+      fetchDriveFiles();
     }
   };
 
@@ -254,7 +401,6 @@ export default function Dashboard() {
       return;
     }
     
-    // Validate file type
     const validTypes = ['.pdf', '.docx', '.txt', '.csv', '.xlsx', '.md'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!validTypes.includes(ext)) {
@@ -346,13 +492,6 @@ export default function Dashboard() {
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const connectIntegration = async (integrationId: string) => {
-    if (integrationId === "drive") {
-      // Open Google OAuth
-      window.open(`${API_URL}/api/auth/google/connect`, "_blank", "width=500,height=600");
     }
   };
 
@@ -492,7 +631,7 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header - Simplified */}
+        {/* Header */}
         <header className="h-14 border-b border-white/10 flex items-center justify-between px-4 bg-[#0d0d0d]/80 backdrop-blur-md">
           <motion.button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -502,7 +641,18 @@ export default function Dashboard() {
           >
             <Menu className="w-5 h-5" />
           </motion.button>
-          
+
+          <div className="flex items-center gap-2">
+            <motion.button
+              onClick={openSettings}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </motion.button>
+
           <SignOutButton>
             <button className="flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition-colors">
               {user?.imageUrl ? (
@@ -514,12 +664,12 @@ export default function Dashboard() {
               )}
             </button>
           </SignOutButton>
+          </div>
         </header>
 
         {/* Chat Area */}
         <main className="flex-1 flex flex-col overflow-hidden relative">
           {messages.length === 0 ? (
-            /* Welcome Screen */
             <div className="flex-1 flex flex-col items-center justify-center px-4">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -538,7 +688,6 @@ export default function Dashboard() {
                   How can I help you today?
                 </p>
 
-                {/* Dynamic Suggested Prompts based on files */}
                 <div className="grid grid-cols-2 gap-3 max-w-lg mx-auto">
                   {files.length > 0 ? (
                     [
@@ -565,7 +714,6 @@ export default function Dashboard() {
               </motion.div>
             </div>
           ) : (
-            /* Chat Messages */
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
               {messages.map((message) => (
                 <motion.div
@@ -619,19 +767,16 @@ export default function Dashboard() {
             <div className="max-w-3xl mx-auto">
               <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl">
                 <div className="flex items-center gap-2 p-2">
-                  {/* + Button - Only show if integrations are configured */}
-                  {integrations.length > 0 && (
-                    <motion.button
-                      onClick={() => setShowIntegrations(true)}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="w-8 h-8 flex items-center justify-center border border-white/20 rounded-xl hover:bg-white/10 text-gray-400"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </motion.button>
-                  )}
+                  <motion.button
+                    onClick={openIntegrations}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 rounded-xl hover:bg-white/10 text-gray-400"
+                    title="Integrations"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </motion.button>
 
-                  {/* Input */}
                   <input
                     type="text"
                     value={inputMessage}
@@ -642,21 +787,19 @@ export default function Dashboard() {
                     className="flex-1 bg-transparent px-3 py-3 text-white placeholder-gray-500 focus:outline-none disabled:opacity-50"
                   />
 
-                  {/* Mic Button */}
                   <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white">
                     <Mic className="w-4 h-4" />
                   </button>
 
-                  {/* Model Selector - Dynamic */}
                   {modelsLoading ? (
                     <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-                  ) : availableModels.length > 0 ? (
+                  ) : providers.length > 0 ? (
                     <motion.button
                       onClick={() => setShowModelSelector(true)}
                       whileHover={{ scale: 1.02 }}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white border border-white/10 rounded-xl"
                     >
-                      {selectedModel?.name || "Select Model"}
+                      {selectedProvider?.name || "Select Model"}
                       <ChevronDown className="w-3 h-3" />
                     </motion.button>
                   ) : (
@@ -674,7 +817,7 @@ export default function Dashboard() {
 
       {/* Model Selector Dialog */}
       <AnimatePresence>
-        {showModelSelector && availableModels.length > 0 && (
+        {showModelSelector && providers.length > 0 && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
@@ -698,26 +841,29 @@ export default function Dashboard() {
               
               <div className="p-4 max-h-[400px] overflow-y-auto">
                 {/* Cloud Models */}
-                {availableModels.filter(m => m.type === "cloud").length > 0 && (
+                {providers.filter(p => p.type === "cloud").length > 0 && (
                   <>
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Cloud models</p>
                     <div className="space-y-1 mb-6">
-                      {availableModels.filter(m => m.type === "cloud").map((model) => (
+                      {providers.filter(p => p.type === "cloud").map((provider) => (
                         <button
-                          key={model.id}
-                          onClick={() => { setSelectedModel(model); setShowModelSelector(false); }}
+                          key={provider.id}
+                          onClick={() => { 
+                            setLLMProvider(provider.id);
+                            setShowModelSelector(false);
+                          }}
                           className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
-                            selectedModel?.id === model.id ? "bg-white/10" : "hover:bg-white/5"
+                            selectedProvider?.id === provider.id ? "bg-white/10" : "hover:bg-white/5"
                           }`}
                         >
                           <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
                             <Cpu className="w-4 h-4" />
                           </div>
                           <div className="flex-1 text-left">
-                            <span className="font-medium">{model.name}</span>
-                            <p className="text-xs text-gray-500">{model.provider}</p>
+                            <span className="font-medium">{provider.name}</span>
+                            <p className="text-xs text-gray-500">{provider.model}</p>
                           </div>
-                          {selectedModel?.id === model.id && (
+                          {selectedProvider?.id === provider.id && (
                             <Check className="w-4 h-4 text-purple-400" />
                           )}
                         </button>
@@ -727,27 +873,30 @@ export default function Dashboard() {
                 )}
 
                 {/* Local Models */}
-                {availableModels.filter(m => m.type === "local").length > 0 && (
+                {providers.filter(p => p.type === "local").length > 0 && (
                   <>
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Local models</p>
                     <div className="space-y-1">
-                      {availableModels.filter(m => m.type === "local").map((model) => (
+                      {providers.filter(p => p.type === "local").map((provider) => (
                         <button
-                          key={model.id}
-                          onClick={() => { setSelectedModel(model); setShowModelSelector(false); }}
+                          key={provider.id}
+                          onClick={() => { 
+                            setLLMProvider(provider.id);
+                            setShowModelSelector(false);
+                          }}
                           className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
-                            selectedModel?.id === model.id ? "bg-white/10" : "hover:bg-white/5"
+                            selectedProvider?.id === provider.id ? "bg-white/10" : "hover:bg-white/5"
                           }`}
                         >
                           <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
                             <HardDrive className="w-4 h-4" />
                           </div>
                           <div className="flex-1 text-left">
-                            <span className="font-medium">{model.name}</span>
-                            <p className="text-xs text-gray-500">{model.provider}</p>
+                            <span className="font-medium">{provider.name}</span>
+                            <p className="text-xs text-gray-500">{provider.model}</p>
                           </div>
                           <span className="text-xs text-gray-500 bg-white/10 px-2 py-1 rounded">Local</span>
-                          {selectedModel?.id === model.id && (
+                          {selectedProvider?.id === provider.id && (
                             <Check className="w-4 h-4 text-purple-400" />
                           )}
                         </button>
@@ -761,9 +910,9 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* Integrations Dialog - Only show if configured */}
+      {/* Integrations Panel */}
       <AnimatePresence>
-        {showIntegrations && integrations.length > 0 && (
+        {showIntegrations && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
@@ -776,51 +925,160 @@ export default function Dashboard() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"
+              className="fixed right-4 bottom-24 w-[420px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"
             >
               <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">Add integration</h3>
-                  <p className="text-sm text-gray-500">Connect your tools and bring your data into MindVault.</p>
-                </div>
+                <h3 className="font-semibold">Integrations</h3>
                 <button onClick={() => setShowIntegrations(false)}>
                   <X className="w-4 h-4 text-gray-400" />
                 </button>
               </div>
-              
-              <div className="p-4 max-h-[400px] overflow-y-auto">
-                {integrationsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
-                  </div>
-                ) : integrations.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    No integrations configured
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {integrations.map((integration) => (
-                      <div
-                        key={integration.id}
-                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5"
-                      >
-                        <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
-                          {integration.icon === "drive" && <Cloud className="w-5 h-5 text-blue-400" />}
+
+              <div className="p-4 max-h-[420px] overflow-y-auto space-y-4">
+                {integrations.map((integration) => (
+                  <div key={integration.id} className="border border-white/10 rounded-xl p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                          <Cloud className="w-4 h-4 text-blue-400" />
                         </div>
-                        <div className="flex-1">
-                          <p className="font-medium">{integration.name}</p>
-                          <p className="text-sm text-gray-500">{integration.description}</p>
+                        <div>
+                          <p className="font-medium text-sm">{integration.name}</p>
+                          <p className="text-xs text-gray-500">{integration.description}</p>
                         </div>
-                        <button 
-                          onClick={() => connectIntegration(integration.id)}
-                          className="px-4 py-1.5 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-                        >
-                          Connect
-                        </button>
                       </div>
-                    ))}
+                      {integration.connected ? (
+                        <span className="text-xs text-green-400 flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Connected
+                        </span>
+                      ) : (
+                        <motion.button
+                          onClick={connectGoogleDrive}
+                          disabled={connectingDrive}
+                          whileHover={{ scale: 1.02 }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50"
+                        >
+                          {connectingDrive ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3" />}
+                          Connect
+                        </motion.button>
+                      )}
+                    </div>
+
+                    {integration.connected && (
+                      <div className="mt-3 space-y-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs text-gray-500">Files in your Drive</p>
+                          <button onClick={fetchDriveFiles} className="text-gray-500 hover:text-white">
+                            <RefreshCw className={`w-3 h-3 ${driveFilesLoading ? "animate-spin" : ""}`} />
+                          </button>
+                        </div>
+                        {driveFilesLoading ? (
+                          <div className="flex justify-center py-3">
+                            <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                          </div>
+                        ) : driveFiles.length === 0 ? (
+                          <p className="text-xs text-gray-500 py-2">No files found, or not loaded yet.</p>
+                        ) : (
+                          driveFiles.map((file) => (
+                            <div key={file.id} className="flex items-center gap-2 p-2 bg-white/5 rounded-lg">
+                              <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                              <span className="flex-1 text-sm truncate">{file.name}</span>
+                              <button
+                                onClick={() => syncDriveFile(file.id)}
+                                disabled={syncingFileId === file.id}
+                                className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded disabled:opacity-50"
+                              >
+                                {syncingFileId === file.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  "Import"
+                                )}
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Settings Panel — manage per-provider API keys */}
+      <AnimatePresence>
+        {showSettings && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSettings(false)}
+              className="fixed inset-0 bg-black/50 z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-0 m-auto w-[440px] h-fit bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"
+            >
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <h3 className="font-semibold">Model API Keys</h3>
+                <button onClick={() => setShowSettings(false)}>
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                <p className="text-xs text-gray-500">
+                  Add your own API key to unlock a model in the selector below. Local Ollama models need no key — just run Ollama.
+                </p>
+
+                {apiKeys.map((key) => (
+                  <div key={key.provider} className="border border-white/10 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Key className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm font-medium">{PROVIDER_LABELS[key.provider] || key.provider}</span>
+                      </div>
+                      {key.configured && (
+                        <span className="text-xs text-green-400">
+                          {key.source === "user" ? "Your key saved" : "Set by server"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="password"
+                        placeholder={key.configured ? "Replace key..." : "Enter API key..."}
+                        value={apiKeyInputs[key.provider] || ""}
+                        onChange={(e) =>
+                          setApiKeyInputs((prev) => ({ ...prev, [key.provider]: e.target.value }))
+                        }
+                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                      />
+                      <button
+                        onClick={() => saveApiKey(key.provider)}
+                        disabled={savingProvider === key.provider || !apiKeyInputs[key.provider]?.trim()}
+                        className="px-3 py-2 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50"
+                      >
+                        {savingProvider === key.provider ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
+                      </button>
+                      {key.source === "user" && (
+                        <button
+                          onClick={() => removeApiKey(key.provider)}
+                          disabled={savingProvider === key.provider}
+                          className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-lg disabled:opacity-50"
+                          title="Remove key"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </motion.div>
           </>

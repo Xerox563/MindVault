@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -13,6 +14,12 @@ security = HTTPBearer(auto_error=False)
 
 CLERK_API_URL = "https://api.clerk.com/v1"
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+
+# Clerk verification hits their API twice per call (session + user lookup); every
+# request through get_current_user pays that latency. Cache verified tokens for a
+# short TTL instead of re-verifying on every single request.
+_CLERK_TOKEN_CACHE_TTL_SECONDS = 60
+_clerk_token_cache: dict[str, tuple[float, dict]] = {}
 
 def get_google_drive_service_from_clerk(user_id: str, clerk_secret: str):
     """Get Google Drive service by fetching OAuth token from Clerk."""
@@ -68,7 +75,17 @@ def get_google_drive_service_from_clerk(user_id: str, clerk_secret: str):
         return None
 
 def verify_clerk_token(token: str) -> dict | None:
-    """Verify a Clerk JWT token using Clerk's API."""
+    """Verify a Clerk JWT token using Clerk's API, with a short-lived cache."""
+    cached = _clerk_token_cache.get(token)
+    if cached and time.time() - cached[0] < _CLERK_TOKEN_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    result = _verify_clerk_token_uncached(token)
+    if result:
+        _clerk_token_cache[token] = (time.time(), result)
+    return result
+
+def _verify_clerk_token_uncached(token: str) -> dict | None:
     try:
         from app.config import settings
         clerk_secret = settings.CLERK_SECRET_KEY

@@ -11,6 +11,8 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     google_token = Column(String, nullable=True)
     google_refresh_token = Column(String, nullable=True)
+    preferred_provider = Column(String, nullable=True)
+    api_keys_encrypted = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     files = relationship("File", back_populates="owner")

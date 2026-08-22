@@ -8,6 +8,7 @@ from app.utils.deps import get_current_user
 from app.config import settings
 from app.services.extractor import extract_text
 from app.services.processor import process_file
+from app.services.user_settings import get_user_api_keys, base_provider
 
 router = APIRouter(prefix="/api", tags=["files"])
 
@@ -51,8 +52,10 @@ async def upload_file(
     if text:
         file_record.extracted_text = text
         db.commit()
-        process_file(db, file_record)
-    
+        provider_id = current_user.preferred_provider or settings.LLM_PROVIDER
+        api_key = get_user_api_keys(current_user).get(base_provider(provider_id))
+        process_file(db, file_record, provider_id=provider_id, api_key=api_key)
+
     return file_record
 
 @router.get("/files", response_model=list[FileResponse])

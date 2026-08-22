@@ -3,6 +3,7 @@ uvicorn[standard]==0.32.1
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
 python-jose[cryptography]==3.3.0
+cryptography==50.0.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.18
 pypdf2==3.0.1
@@ -11,6 +12,7 @@ openpyxl==3.1.5
 langchain==0.3.14
 langchain-community==0.3.14
 mistralai==0.4.2
+ollama==0.6.2
 chromadb==0.5.23
 python-dotenv==1.0.1
 pydantic==2.9.2

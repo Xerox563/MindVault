@@ -4,6 +4,7 @@ from app.api.auth import router as auth_router
 from app.api.files import router as files_router
 from app.api.chat import router as chat_router
 from app.api.drive import router as drive_router
+from app.api.settings import router as settings_router
 from app.database import init_db
 
 app = FastAPI(title="MindVault API", version="1.0.0")
@@ -20,6 +21,7 @@ app.include_router(auth_router)
 app.include_router(files_router)
 app.include_router(chat_router)
 app.include_router(drive_router)
+app.include_router(settings_router)
 
 @app.on_event("startup")
 def startup():
