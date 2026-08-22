@@ -17,7 +17,7 @@ def verify_clerk_token(token: str) -> dict | None:
         from app.config import settings
         clerk_secret = settings.CLERK_SECRET_KEY
         if not clerk_secret:
-            print("CLERK_SECRET_KEY not set")
+            print("CLERK_SECRET_KEY not set in settings")
             return None
         
         # Call Clerk's sessions/verify endpoint
@@ -26,6 +26,7 @@ def verify_clerk_token(token: str) -> dict | None:
             "Content-Type": "application/json"
         }
         
+        print(f"Verifying token with Clerk API...")
         response = requests.post(
             f"{CLERK_API_URL}/sessions/verify",
             headers=headers,
@@ -33,10 +34,14 @@ def verify_clerk_token(token: str) -> dict | None:
             timeout=10
         )
         
+        print(f"Clerk verify response status: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
+            print(f"Session status: {data.get('status')}")
             if data.get('status') == 'active':
                 user_id = data.get('user_id')
+                print(f"User ID from session: {user_id}")
                 # Get user details from Clerk
                 user_response = requests.get(
                     f"{CLERK_API_URL}/users/{user_id}",
@@ -50,16 +55,21 @@ def verify_clerk_token(token: str) -> dict | None:
                     if user_data.get('email_addresses'):
                         email = user_data['email_addresses'][0].get('email_address')
                     
+                    print(f"Found user email: {email}")
                     return {
                         'user_id': user_id,
                         'email': email,
                         'first_name': user_data.get('first_name'),
                         'last_name': user_data.get('last_name')
                     }
+        else:
+            print(f"Clerk verify failed: {response.text}")
         
         return None
     except Exception as e:
         print(f"Clerk verification error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def get_current_user(
