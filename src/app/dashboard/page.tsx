@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth, useUser, SignOutButton } from "@clerk/nextjs";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -16,9 +17,9 @@ import {
   Menu,
   ChevronRight,
   Search,
-  MoreVertical
+  User
 } from "lucide-react";
-import { AnimatedBackground, GradientText, FadeIn, SpotlightCard } from "@/components/animations";
+import { AnimatedBackground, GradientText } from "@/components/animations";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -44,6 +45,8 @@ interface Message {
 }
 
 export default function Dashboard() {
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { user } = useUser();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -51,27 +54,30 @@ export default function Dashboard() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [viewing, setViewing] = useState<{ content: string; fileType: string; filename: string } | null>(null);
-  const [token, setToken] = useState("");
   const [showDrive, setShowDrive] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [dragActive, setDragActive] = useState(false);
 
+  // Check auth and fetch files
   useEffect(() => {
-    const t = localStorage.getItem("token");
-    if (!t) window.location.href = "/login";
-    else {
-      setToken(t);
-      fetchFiles(t);
+    if (isLoaded && isSignedIn) {
+      fetchFiles();
     }
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
-  const fetchFiles = async (t?: string) => {
-    const tok = t || token;
+  const getAuthToken = async () => {
+    const token = await getToken();
+    return token;
+  };
+
+  const fetchFiles = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+    
     try {
       const res = await fetch(`${API_URL}/api/files`, {
-        headers: { Authorization: `Bearer ${tok}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) setFiles(await res.json());
     } catch (error) {
@@ -80,6 +86,9 @@ export default function Dashboard() {
   };
 
   const fetchDriveFiles = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+    
     try {
       const res = await fetch(`${API_URL}/api/drive/files`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -94,12 +103,14 @@ export default function Dashboard() {
   };
 
   const handleUpload = async (file: File) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    
     setUploading(file.name);
     setUploadProgress(0);
     const formData = new FormData();
     formData.append("file", file);
     
-    // Simulate progress
     const progressInterval = setInterval(() => {
       setUploadProgress((prev) => Math.min(prev + 10, 90));
     }, 200);
@@ -126,6 +137,9 @@ export default function Dashboard() {
   };
 
   const handleDelete = async (id: number) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    
     try {
       await fetch(`${API_URL}/api/files/${id}`, {
         method: "DELETE",
@@ -138,6 +152,9 @@ export default function Dashboard() {
   };
 
   const handleView = async (id: number) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    
     try {
       const res = await fetch(`${API_URL}/api/files/${id}/content`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -149,6 +166,9 @@ export default function Dashboard() {
   };
 
   const handleSyncDriveFile = async (fileId: string) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    
     try {
       await fetch(`${API_URL}/api/sync/drive/${fileId}`, {
         method: "POST",
@@ -163,6 +183,8 @@ export default function Dashboard() {
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
+    const token = await getAuthToken();
+    if (!token) return;
     
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -201,11 +223,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    window.location.href = "/login";
-  };
-
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -232,6 +249,34 @@ export default function Dashboard() {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <motion.div
+          className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        />
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center">
+        <p className="text-white mb-4">Please sign in to access the dashboard</p>
+        <Link href="/login">
+          <motion.button
+            className="px-6 py-3 rounded-full bg-gradient-to-r from-violet-500 to-cyan-500 text-white font-semibold"
+            whileHover={{ scale: 1.05 }}
+          >
+            Sign In
+          </motion.button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white overflow-hidden">
@@ -274,20 +319,39 @@ export default function Dashboard() {
               <Cloud className="w-4 h-4" />
               <span className="hidden sm:inline">Google Drive</span>
             </motion.button>
-            <motion.button
-              onClick={handleLogout}
-              className="p-2 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <LogOut className="w-5 h-5" />
-            </motion.button>
+            
+            {/* User Menu */}
+            <div className="flex items-center gap-2">
+              {user?.imageUrl ? (
+                <img
+                  src={user.imageUrl}
+                  alt={user.firstName || "User"}
+                  className="w-8 h-8 rounded-full border border-white/20"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
+                  <User className="w-4 h-4" />
+                </div>
+              )}
+              <span className="text-sm text-gray-300 hidden md:block">
+                {user?.firstName || user?.emailAddresses[0]?.emailAddress}
+              </span>
+              <SignOutButton>
+                <motion.button
+                  className="p-2 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <LogOut className="w-5 h-5" />
+                </motion.button>
+              </SignOutButton>
+            </div>
           </div>
         </div>
       </motion.header>
 
       <div className="flex pt-16 h-screen">
-        {/* Sidebar */}
+        {/* Sidebar - Same as before */}
         <AnimatePresence mode="wait">
           {sidebarOpen && (
             <motion.aside
@@ -437,7 +501,11 @@ export default function Dashboard() {
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-w-0">
           {showDrive ? (
-            <FadeIn className="flex-1 p-6 overflow-auto">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }}
+              className="flex-1 p-6 overflow-auto"
+            >
               <div className="max-w-4xl mx-auto">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -485,7 +553,7 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-            </FadeIn>
+            </motion.div>
           ) : (
             <>
               {/* Chat Messages */}
@@ -521,7 +589,7 @@ export default function Dashboard() {
                       </div>
                     </motion.div>
                   ) : (
-                    messages.map((message, index) => (
+                    messages.map((message) => (
                       <motion.div
                         key={message.id}
                         initial={{ opacity: 0, y: 20 }}

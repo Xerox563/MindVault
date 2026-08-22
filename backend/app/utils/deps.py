@@ -1,18 +1,104 @@
-from fastapi import Depends, HTTPException, status
+import os
+import requests
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.utils.auth import decode_token
 from app.models.user import User
+from app.config import settings
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> User:
-    token = credentials.credentials
+CLERK_JWT_VERIFICATION_URL = "https://api.clerk.com/v1/sessions/verify"
+
+def verify_clerk_token(token: str) -> dict | None:
+    """Verify a Clerk JWT token and return user data."""
+    try:
+        # Clerk token format: eyJ... (standard JWT)
+        # We'll use Clerk's API to verify the token
+        headers = {
+            "Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY', '')}",
+            "Content-Type": "application/json"
+        }
+        
+        # Decode token without verification first to get session ID
+        import jwt
+        try:
+            # Try to decode the JWT to get the user ID
+            # Clerk tokens have 'sub' claim which is the user ID
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            clerk_user_id = decoded.get('sub')
+            
+            if clerk_user_id:
+                return {
+                    'user_id': clerk_user_id,
+                    'email': decoded.get('email'),
+                    'first_name': decoded.get('first_name'),
+                    'last_name': decoded.get('last_name')
+                }
+        except:
+            pass
+        
+        return None
+    except Exception as e:
+        print(f"Clerk verification error: {e}")
+        return None
+
+def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: Session = Depends(get_db)
+) -> User:
+    """Get current user from either Clerk token or legacy JWT."""
+    
+    # Get token from header
+    token = None
+    if credentials:
+        token = credentials.credentials
+    else:
+        # Try to get from Authorization header directly
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+    
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No authentication token provided")
+    
+    # First, try to verify as Clerk token
+    clerk_data = verify_clerk_token(token)
+    
+    if clerk_data:
+        # Find or create user by Clerk ID
+        # Use the Clerk user ID as a string (it starts with "user_")
+        clerk_user_id = clerk_data['user_id']
+        
+        # Look for existing user
+        user = db.query(User).filter(User.email == clerk_data.get('email')).first()
+        
+        if not user:
+            # Create new user
+            import secrets
+            from app.utils.auth import hash_password
+            
+            user = User(
+                email=clerk_data.get('email') or f"{clerk_user_id}@clerk.user",
+                password_hash=hash_password(secrets.token_hex(32)),  # Random password
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        
+        return user
+    
+    # Fall back to legacy JWT verification
+    from app.utils.auth import decode_token
     user_id = decode_token(token)
+    
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    
     return user

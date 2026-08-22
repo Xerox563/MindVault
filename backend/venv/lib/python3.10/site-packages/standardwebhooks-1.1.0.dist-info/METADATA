@@ -1,0 +1,69 @@
+Metadata-Version: 2.4
+Name: standardwebhooks
+Version: 1.1.0
+Summary: Standard Webhooks
+Author: Standard Webhooks Team
+License-Expression: MIT
+Keywords: webhooks
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Information Technology
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Topic :: Software Development
+Classifier: Topic :: Software Development :: Libraries
+Classifier: Topic :: Software Development :: Libraries :: Application Frameworks
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Typing :: Typed
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+
+Python library for Standard Webhooks
+
+# Example
+
+Verifying a webhook payload:
+
+```python
+from standardwebhooks.webhooks import Webhook
+
+wh = Webhook(base64_secret)
+wh.verify(webhook_payload, webhook_headers)
+```
+
+# Development
+
+## Requirements
+
+ - python 3
+
+## Installing dependencies
+
+```sh
+python -m venv .venv
+pip install -r requirements.txt && pip install -r requirements-dev.txt
+```
+
+## Contributing
+
+Before opening a PR be sure to format your code!
+
+```sh
+./scripts/format.sh
+```
+
+## Running Tests
+
+Simply run:
+
+```sh
+pytest
+```

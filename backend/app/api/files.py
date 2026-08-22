@@ -18,7 +18,6 @@ def validate_file(filename: str) -> bool:
 @router.post("/upload", response_model=FileResponse)
 async def upload_file(
     uploaded_file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
