@@ -9,35 +9,52 @@ from app.config import settings
 
 security = HTTPBearer(auto_error=False)
 
-CLERK_JWT_VERIFICATION_URL = "https://api.clerk.com/v1/sessions/verify"
+CLERK_API_URL = "https://api.clerk.com/v1"
 
 def verify_clerk_token(token: str) -> dict | None:
-    """Verify a Clerk JWT token and return user data."""
+    """Verify a Clerk JWT token using Clerk's API."""
     try:
-        # Clerk token format: eyJ... (standard JWT)
-        # We'll use Clerk's API to verify the token
+        clerk_secret = os.getenv('CLERK_SECRET_KEY', '')
+        if not clerk_secret:
+            print("CLERK_SECRET_KEY not set")
+            return None
+        
+        # Call Clerk's sessions/verify endpoint
         headers = {
-            "Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY', '')}",
+            "Authorization": f"Bearer {clerk_secret}",
             "Content-Type": "application/json"
         }
         
-        # Decode token without verification first to get session ID
-        import jwt
-        try:
-            # Try to decode the JWT to get the user ID
-            # Clerk tokens have 'sub' claim which is the user ID
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            clerk_user_id = decoded.get('sub')
-            
-            if clerk_user_id:
-                return {
-                    'user_id': clerk_user_id,
-                    'email': decoded.get('email'),
-                    'first_name': decoded.get('first_name'),
-                    'last_name': decoded.get('last_name')
-                }
-        except:
-            pass
+        response = requests.post(
+            f"{CLERK_API_URL}/sessions/verify",
+            headers=headers,
+            json={"token": token},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 'active':
+                user_id = data.get('user_id')
+                # Get user details from Clerk
+                user_response = requests.get(
+                    f"{CLERK_API_URL}/users/{user_id}",
+                    headers=headers,
+                    timeout=10
+                )
+                
+                if user_response.status_code == 200:
+                    user_data = user_response.json()
+                    email = None
+                    if user_data.get('email_addresses'):
+                        email = user_data['email_addresses'][0].get('email_address')
+                    
+                    return {
+                        'user_id': user_id,
+                        'email': email,
+                        'first_name': user_data.get('first_name'),
+                        'last_name': user_data.get('last_name')
+                    }
         
         return None
     except Exception as e:
@@ -69,11 +86,11 @@ def get_current_user(
     
     if clerk_data:
         # Find or create user by Clerk ID
-        # Use the Clerk user ID as a string (it starts with "user_")
         clerk_user_id = clerk_data['user_id']
+        email = clerk_data.get('email') or f"{clerk_user_id}@clerk.user"
         
-        # Look for existing user
-        user = db.query(User).filter(User.email == clerk_data.get('email')).first()
+        # Look for existing user by email
+        user = db.query(User).filter(User.email == email).first()
         
         if not user:
             # Create new user
@@ -81,7 +98,7 @@ def get_current_user(
             from app.utils.auth import hash_password
             
             user = User(
-                email=clerk_data.get('email') or f"{clerk_user_id}@clerk.user",
+                email=email,
                 password_hash=hash_password(secrets.token_hex(32)),  # Random password
             )
             db.add(user)
