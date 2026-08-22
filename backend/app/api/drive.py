@@ -21,6 +21,8 @@ def get_flow():
                 "client_id": settings.GOOGLE_CLIENT_ID,
                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
                 "redirect_uris": [settings.GOOGLE_REDIRECT_URI],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
             }
         },
         scopes=["https://www.googleapis.com/auth/drive.readonly"],

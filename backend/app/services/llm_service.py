@@ -90,10 +90,16 @@ class LLMService:
 
     def generate_chat_response(self, prompt: str, context: str = "", provider_id: str = "mistral", api_key: Optional[str] = None) -> str:
         try:
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant. Answer based on the provided context."},
-                {"role": "user", "content": f"Context: {context}\n\nQuestion: {prompt}"}
-            ]
+            if context.strip():
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant. Answer the user's question using the provided context from their documents. If the context doesn't contain the answer, say so rather than making one up."},
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {prompt}"}
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": "You are a helpful, friendly assistant for MindVault, a document knowledge base. Chat naturally. If the user asks about their documents and none were found relevant, let them know you couldn't find anything in their uploaded files."},
+                    {"role": "user", "content": prompt}
+                ]
 
             if provider_id.startswith('ollama'):
                 client = self._ollama_client()

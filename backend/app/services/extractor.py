@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from PyPDF2 import PdfFileReader
+from PyPDF2 import PdfReader
 from docx import Document
 from openpyxl import load_workbook
 from app.utils.logger import log_error, log_info
@@ -27,7 +27,7 @@ def extract_text(file_path: str, file_type: str) -> Optional[str]:
         return None
 
 def extract_pdf(file_path: str) -> Optional[str]:
-    reader = PdfFileReader(file_path)
+    reader = PdfReader(file_path)
     text = ""
     for page in reader.pages:
         text += page.extract_text() or ""

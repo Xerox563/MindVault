@@ -19,14 +19,21 @@ def add_embedding(chunk_id: int, text: str, embedding: list[float], metadata: di
     )
 
 def search_similar(query_embedding: list[float], user_id: int, n_results: int = 5) -> list[dict]:
+    """Returns nearest chunks with their L2 distance so callers can drop irrelevant
+    matches (Chroma's default n_results are always returned even when nothing
+    is actually relevant, e.g. small talk against a document collection)."""
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=n_results,
-        where={"user_id": user_id}
+        where={"user_id": user_id},
+        include=["documents", "metadatas", "distances"]
     )
     if not results["ids"] or not results["ids"][0]:
         return []
-    return [{"id": r[0], "text": r[1], "metadata": r[2]} for r in zip(results["ids"][0], results["documents"][0], results["metadatas"][0])]
+    return [
+        {"id": r[0], "text": r[1], "metadata": r[2], "distance": r[3]}
+        for r in zip(results["ids"][0], results["documents"][0], results["metadatas"][0], results["distances"][0])
+    ]
 
 def delete_embedding(chunk_id: int):
     collection.delete(ids=[str(chunk_id)])
