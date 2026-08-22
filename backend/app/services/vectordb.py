@@ -3,7 +3,7 @@ import chromadb
 from chromadb.config import Settings
 from app.config import settings
 
-CHROMA_DIR = os.path.join(os.path.dirname(settings.UPLOAD_DIR.rstrip("/")) or "data", "chroma")
+CHROMA_DIR = settings.CHROMA_PERSIST_DIR
 os.makedirs(CHROMA_DIR, exist_ok=True)
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))

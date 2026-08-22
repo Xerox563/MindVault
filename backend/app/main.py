@@ -6,12 +6,13 @@ from app.api.chat import router as chat_router
 from app.api.drive import router as drive_router
 from app.api.settings import router as settings_router
 from app.database import init_db
+from app.config import settings
 
 app = FastAPI(title="MindVault API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

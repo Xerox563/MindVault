@@ -3,7 +3,15 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
-engine = create_engine(settings.DATABASE_URL)
+_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
+    # Supabase (and most managed Postgres) drop idle connections; pre_ping
+    # avoids "server closed the connection unexpectedly" on the next request.
+    pool_pre_ping=not _is_sqlite,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

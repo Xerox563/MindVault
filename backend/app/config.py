@@ -8,12 +8,27 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24
     UPLOAD_DIR: str = "data/uploads"
+    # Point this at a mounted persistent disk in production (e.g. Render disk
+    # mounted at /data -> CHROMA_PERSIST_DIR=/data/chroma). Left as a relative
+    # local path by default so it just works in local dev.
+    CHROMA_PERSIST_DIR: str = "data/chroma"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".xlsx", ".txt"]
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
     CLERK_SECRET_KEY: str = ""
+
+    # Comma-separated list of allowed frontend origins for CORS. Local dev origin
+    # is always included so this never breaks `npm run dev`, even if unset/misset
+    # in production. Add your Vercel URL here in prod, e.g.:
+    # ALLOWED_ORIGINS=https://mindvault.vercel.app,https://mindvault-git-main.vercel.app
+    ALLOWED_ORIGINS: str = ""
+
+    @property
+    def CORS_ORIGINS(self) -> list[str]:
+        extra = [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
+        return list(dict.fromkeys(["http://localhost:3000"] + extra))
     
     # LLM Configuration - supports both Mistral and Ollama
     LLM_PROVIDER: str = "mistral"  # Default provider
