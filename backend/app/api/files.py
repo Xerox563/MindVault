@@ -70,3 +70,10 @@ def delete_file(file_id: int, db: Session = Depends(get_db), current_user: User 
     db.delete(file)
     db.commit()
     return {"message": "File deleted"}
+
+@router.get("/files/{file_id}/content")
+def get_file_content(file_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    file = db.query(FileModel).filter(FileModel.id == file_id, FileModel.user_id == current_user.id).first()
+    if not file:
+        raise HTTPException(404, "File not found")
+    return {"content": file.extracted_text or "", "file_type": file.file_type, "filename": file.filename}
