@@ -110,14 +110,19 @@ export default function Dashboard() {
   
   const connectGoogleDrive = async () => {
     const token = await getAuthToken();
+    console.log("Token for popup:", token ? "Present (length: " + token.length + ")" : "MISSING");
+    
     if (!token) {
       alert("Please sign in first");
       return;
     }
     
+    const url = `${API_URL}/api/auth/google/connect?token=${encodeURIComponent(token)}`;
+    console.log("Opening popup URL:", url.substring(0, 100) + "...");
+    
     // Open Google OAuth in a popup with token in URL
     const popup = window.open(
-      `${API_URL}/api/auth/google/connect?token=${encodeURIComponent(token)}`,
+      url,
       "Connect Google Drive",
       "width=500,height=600"
     );

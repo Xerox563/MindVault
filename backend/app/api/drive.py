@@ -33,6 +33,12 @@ def connect_google(request: Request, db: Session = Depends(get_db)):
     # Get token from query parameter (for popup flow)
     token = request.query_params.get('token')
     
+    # Debug logging
+    print(f"Connect endpoint called")
+    print(f"Query params: {request.query_params}")
+    print(f"Token present: {bool(token)}")
+    print(f"Token length: {len(token) if token else 0}")
+    
     if not token:
         raise HTTPException(401, "No authentication token provided")
     
