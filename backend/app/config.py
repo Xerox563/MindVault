@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
+    CLERK_SECRET_KEY: str = ""
 
     class Config:
         env_file = ".env"

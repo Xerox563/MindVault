@@ -14,7 +14,8 @@ CLERK_API_URL = "https://api.clerk.com/v1"
 def verify_clerk_token(token: str) -> dict | None:
     """Verify a Clerk JWT token using Clerk's API."""
     try:
-        clerk_secret = os.getenv('CLERK_SECRET_KEY', '')
+        from app.config import settings
+        clerk_secret = settings.CLERK_SECRET_KEY
         if not clerk_secret:
             print("CLERK_SECRET_KEY not set")
             return None
