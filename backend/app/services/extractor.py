@@ -3,20 +3,27 @@ from typing import Optional
 from PyPDF2 import PdfReader
 from docx import Document
 from openpyxl import load_workbook
+from app.utils.logger import log_error, log_info
 
 def extract_text(file_path: str, file_type: str) -> Optional[str]:
     ext = file_type.lower()
     try:
         if ext == ".pdf":
-            return extract_pdf(file_path)
+            result = extract_pdf(file_path)
         elif ext == ".docx":
-            return extract_docx(file_path)
+            result = extract_docx(file_path)
         elif ext == ".xlsx":
-            return extract_xlsx(file_path)
+            result = extract_xlsx(file_path)
         elif ext == ".txt":
-            return extract_txt(file_path)
-        return None
-    except Exception:
+            result = extract_txt(file_path)
+        else:
+            log_error(f"Unsupported file type: {ext}")
+            return None
+        if result:
+            log_info(f"Extracted {len(result)} chars from {file_path}")
+        return result
+    except Exception as e:
+        log_error(f"Extraction failed for {file_path}: {str(e)}")
         return None
 
 def extract_pdf(file_path: str) -> Optional[str]:
