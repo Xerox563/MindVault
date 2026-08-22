@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from google_auth_oauthlib.flow import Flow
@@ -28,22 +28,89 @@ def get_flow():
     )
 
 @router.get("/auth/google/connect")
-def connect_google(current_user: User = Depends(get_current_user)):
-    """Legacy Google OAuth connection - kept for backward compatibility"""
+def connect_google(request: Request, db: Session = Depends(get_db)):
+    """Google OAuth connection - accepts token from query param for popup flow"""
+    # Get token from query parameter (for popup flow)
+    token = request.query_params.get('token')
+    
+    if not token:
+        raise HTTPException(401, "No authentication token provided")
+    
+    # Verify token and get user
+    from app.utils.deps import verify_clerk_token
+    clerk_data = verify_clerk_token(token)
+    
+    if not clerk_data:
+        raise HTTPException(401, "Invalid token")
+    
+    # Find or create user
+    email = clerk_data.get('email') or f"{clerk_data['user_id']}@clerk.user"
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        import secrets
+        from app.utils.auth import hash_password
+        user = User(
+            email=email,
+            password_hash=hash_password(secrets.token_hex(32)),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    
+    # Generate auth URL with user ID in state
+    import json
+    import base64
+    state = base64.urlsafe_b64encode(json.dumps({"user_id": user.id}).encode()).decode()
+    
     flow = get_flow()
-    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
-    return {"auth_url": auth_url}
+    auth_url, _ = flow.authorization_url(
+        prompt="consent", 
+        access_type="offline",
+        state=state
+    )
+    return RedirectResponse(url=auth_url)
 
 @router.get("/auth/google/callback")
-def google_callback(request: Request, code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Legacy Google OAuth callback - kept for backward compatibility"""
+def google_callback(request: Request, code: str, state: str = None, db: Session = Depends(get_db)):
+    """Google OAuth callback - handles popup flow with state parameter"""
     flow = get_flow()
     flow.fetch_token(code=code)
     creds = flow.credentials
-    current_user.google_token = creds.token
-    current_user.google_refresh_token = creds.refresh_token
-    db.commit()
-    return RedirectResponse(url="/dashboard")
+    
+    # Get user from state parameter
+    if state:
+        import json
+        import base64
+        try:
+            state_data = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
+            user_id = state_data.get('user_id')
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                user.google_token = creds.token
+                user.google_refresh_token = creds.refresh_token
+                db.commit()
+        except Exception as e:
+            print(f"Error decoding state: {e}")
+    
+    # Return a page that closes the popup
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Google Drive Connected</title>
+        <script>
+            window.opener.postMessage('google-drive-connected', '*');
+            window.close();
+        </script>
+    </head>
+    <body>
+        <h1>Google Drive Connected!</h1>
+        <p>You can close this window.</p>
+    </body>
+    </html>
+    """
+    return Response(content=html_content, media_type="text/html")
 
 @router.get("/drive/files")
 def drive_files(current_user: User = Depends(get_current_user)):

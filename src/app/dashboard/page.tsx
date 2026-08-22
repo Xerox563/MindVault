@@ -108,10 +108,16 @@ export default function Dashboard() {
     }
   };
   
-  const connectGoogleDrive = () => {
-    // Open Google OAuth in a popup
+  const connectGoogleDrive = async () => {
+    const token = await getAuthToken();
+    if (!token) {
+      alert("Please sign in first");
+      return;
+    }
+    
+    // Open Google OAuth in a popup with token in URL
     const popup = window.open(
-      `${API_URL}/api/auth/google/connect`,
+      `${API_URL}/api/auth/google/connect?token=${encodeURIComponent(token)}`,
       "Connect Google Drive",
       "width=500,height=600"
     );
@@ -122,10 +128,23 @@ export default function Dashboard() {
       return;
     }
     
-    // Poll for popup close
+    // Listen for message from popup
+    const messageHandler = (event: MessageEvent) => {
+      if (event.data === 'google-drive-connected') {
+        window.removeEventListener('message', messageHandler);
+        // Refresh Drive files
+        setTimeout(() => {
+          fetchDriveFiles();
+        }, 500);
+      }
+    };
+    window.addEventListener('message', messageHandler);
+    
+    // Poll for popup close as fallback
     const timer = setInterval(() => {
       if (popup.closed) {
         clearInterval(timer);
+        window.removeEventListener('message', messageHandler);
         // Refresh after connection attempt
         setTimeout(() => {
           fetchDriveFiles();
