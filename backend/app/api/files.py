@@ -7,6 +7,7 @@ from app.schemas.file import FileResponse
 from app.utils.deps import get_current_user
 from app.config import settings
 from app.services.extractor import extract_text
+from app.services.processor import process_file
 
 router = APIRouter(prefix="/api", tags=["files"])
 
@@ -51,6 +52,7 @@ async def upload_file(
     if text:
         file_record.extracted_text = text
         db.commit()
+        process_file(db, file_record)
     
     return file_record
 
