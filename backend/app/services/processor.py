@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.models.user import File, Chunk, Embedding
 from app.services.chunker import chunk_text
 from app.services.embeddings import get_embedding
+from app.services.vectordb import add_embedding
 
 def process_file(db: Session, file: File):
     if not file.extracted_text:
@@ -27,3 +28,10 @@ def process_file(db: Session, file: File):
             )
             db.add(embedding_record)
             db.commit()
+            
+            add_embedding(
+                chunk_id=chunk_record.id,
+                text=text,
+                embedding=embedding_vector,
+                metadata={"file_id": file.id, "filename": file.filename}
+            )
