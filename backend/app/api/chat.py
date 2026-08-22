@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.user import User, ChatHistory, Citation
+from app.models.user import User, ChatHistory, Citation, File, Chunk
 from app.schemas.chat import AskRequest, AskResponse
 from app.utils.deps import get_current_user
 from app.services.rag import rag_query
@@ -22,12 +22,14 @@ def ask_question(request: AskRequest, db: Session = Depends(get_db), current_use
     db.refresh(chat)
     
     for source in result["sources"]:
-        citation = Citation(
-            chat_id=chat.id,
-            chunk_id=source["chunk_id"],
-            file_id=source["chunk_id"]
-        )
-        db.add(citation)
+        chunk = db.query(Chunk).filter(Chunk.id == source["chunk_id"]).first()
+        if chunk:
+            citation = Citation(
+                chat_id=chat.id,
+                chunk_id=chunk.id,
+                file_id=chunk.file_id
+            )
+            db.add(citation)
     db.commit()
     
     return AskResponse(answer=result["answer"], sources=result["sources"])
