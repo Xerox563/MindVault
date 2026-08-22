@@ -6,10 +6,66 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.config import settings
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 security = HTTPBearer(auto_error=False)
 
 CLERK_API_URL = "https://api.clerk.com/v1"
+SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+
+def get_google_drive_service_from_clerk(user_id: str, clerk_secret: str):
+    """Get Google Drive service by fetching OAuth token from Clerk."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {clerk_secret}",
+            "Content-Type": "application/json"
+        }
+        
+        # Get user's OAuth access tokens from Clerk
+        # This endpoint returns OAuth tokens for the user's connected accounts
+        response = requests.get(
+            f"{CLERK_API_URL}/users/{user_id}/oauth_access_tokens/google",
+            headers=headers,
+            timeout=10
+        )
+        
+        print(f"OAuth token response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"OAuth token data: {data}")
+            
+            # Check if we have tokens
+            if data and len(data) > 0:
+                token_data = data[0]  # Get first token
+                access_token = token_data.get('token')
+                
+                if access_token:
+                    print(f"Found Google access token")
+                    
+                    # Create credentials with just access token
+                    # Google client library will handle token refresh if needed
+                    creds = Credentials(
+                        token=access_token,
+                        token_uri="https://oauth2.googleapis.com/token",
+                        client_id=settings.GOOGLE_CLIENT_ID,
+                        client_secret=settings.GOOGLE_CLIENT_SECRET,
+                        scopes=SCOPES
+                    )
+                    
+                    # Build Drive service
+                    service = build('drive', 'v3', credentials=creds)
+                    return service
+        else:
+            print(f"Failed to get OAuth token: {response.text}")
+        
+        return None
+    except Exception as e:
+        print(f"Error getting Google Drive service from Clerk: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def verify_clerk_token(token: str) -> dict | None:
     """Verify a Clerk JWT token using Clerk's API."""
@@ -92,11 +148,14 @@ def verify_clerk_token(token: str) -> dict | None:
                         email = user_data['email_addresses'][0].get('email_address')
                     
                     print(f"Found user email: {email}")
+                    # Include full user data for Google Drive integration
                     return {
                         'user_id': user_id,
                         'email': email,
                         'first_name': user_data.get('first_name'),
-                        'last_name': user_data.get('last_name')
+                        'last_name': user_data.get('last_name'),
+                        'external_accounts': user_data.get('external_accounts', []),
+                        'full_user_data': user_data  # Store full data for potential future use
                     }
         else:
             print(f"Clerk verify failed: {response.status_code} - {response.text}")
@@ -151,6 +210,10 @@ def get_current_user(
             db.add(user)
             db.commit()
             db.refresh(user)
+        
+        # Attach Clerk user data to the user object for Google Drive integration
+        # Store external_accounts in a way that can be accessed later
+        user._clerk_data = clerk_data
         
         return user
     
