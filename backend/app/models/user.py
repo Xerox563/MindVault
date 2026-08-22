@@ -9,6 +9,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
+    google_token = Column(String, nullable=True)
+    google_refresh_token = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     files = relationship("File", back_populates="owner")
@@ -24,6 +26,7 @@ class File(Base):
     file_type = Column(String, nullable=False)
     file_size = Column(Integer, nullable=False)
     extracted_text = Column(Text, nullable=True)
+    source = Column(String, default="local")
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="files")
