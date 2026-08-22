@@ -1,11 +1,12 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, File as FileModel
 from app.schemas.file import FileResponse
 from app.utils.deps import get_current_user
 from app.config import settings
+from app.services.extractor import extract_text
 
 router = APIRouter(prefix="/api", tags=["files"])
 
@@ -16,6 +17,7 @@ def validate_file(filename: str) -> bool:
 @router.post("/upload", response_model=FileResponse)
 async def upload_file(
     uploaded_file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -44,6 +46,12 @@ async def upload_file(
     db.add(file_record)
     db.commit()
     db.refresh(file_record)
+    
+    text = extract_text(file_path, file_ext)
+    if text:
+        file_record.extracted_text = text
+        db.commit()
+    
     return file_record
 
 @router.get("/files", response_model=list[FileResponse])
