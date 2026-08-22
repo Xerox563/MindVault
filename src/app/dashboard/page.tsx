@@ -204,7 +204,7 @@ export default function Dashboard() {
     setUploading(file.name);
     setUploadProgress(0);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("uploaded_file", file);  // Changed from "file" to "uploaded_file" to match backend
     
     const progressInterval = setInterval(() => {
       setUploadProgress((prev) => Math.min(prev + 10, 90));
@@ -217,12 +217,20 @@ export default function Dashboard() {
         body: formData,
       });
       clearInterval(progressInterval);
+      
+      console.log("Upload response status:", res.status);
+      
       if (res.ok) {
         setUploadProgress(100);
         fetchFiles();
+      } else {
+        const errorData = await res.json();
+        console.error("Upload failed:", errorData);
+        alert(`Upload failed: ${errorData.detail || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Upload failed:", error);
+      alert("Upload failed. Check console for details.");
     } finally {
       setTimeout(() => {
         setUploading(null);
@@ -316,8 +324,18 @@ export default function Dashboard() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleUpload(e.dataTransfer.files[0]);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      // Validate file type
+      const validTypes = ['.pdf', '.docx', '.xlsx', '.txt'];
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (validTypes.includes(ext)) {
+        handleUpload(file);
+      } else {
+        alert(`Invalid file type. Allowed: ${validTypes.join(', ')}`);
+      }
     }
   };
 
