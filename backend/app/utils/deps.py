@@ -27,21 +27,57 @@ def verify_clerk_token(token: str) -> dict | None:
         }
         
         print(f"Verifying token with Clerk API...")
-        response = requests.post(
-            f"{CLERK_API_URL}/sessions/verify",
-            headers=headers,
-            json={"token": token},
-            timeout=10
-        )
+        
+        # Try to decode the JWT first to get session ID
+        import jwt
+        try:
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            session_id = decoded.get('sid')  # Session ID
+            print(f"Decoded session_id: {session_id}")
+        except Exception as e:
+            print(f"Failed to decode JWT: {e}")
+            session_id = None
+        
+        # Verify using the token directly with GET request
+        # Clerk expects the token in the Authorization header
+        verify_headers = {
+            "Authorization": f"Bearer {token}",  # Use user's token, not secret
+            "Content-Type": "application/json"
+        }
+        
+        # Try retrieving the session
+        if session_id:
+            response = requests.get(
+                f"{CLERK_API_URL}/sessions/{session_id}",
+                headers=headers,  # Use secret key for admin access
+                timeout=10
+            )
+        else:
+            # Fallback: try to validate by getting current user info
+            response = requests.get(
+                f"{CLERK_API_URL}/me",
+                headers=verify_headers,  # Use user's token
+                timeout=10
+            )
         
         print(f"Clerk verify response status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            print(f"Session status: {data.get('status')}")
-            if data.get('status') == 'active':
+            print(f"Session data: {data}")
+            
+            # Handle different response formats
+            if 'id' in data and 'user_id' in data:
+                # Session object format
                 user_id = data.get('user_id')
-                print(f"User ID from session: {user_id}")
+            elif 'id' in data:
+                # User object format (from /me endpoint)
+                user_id = data.get('id')
+            else:
+                user_id = None
+            
+            if user_id:
+                print(f"User ID: {user_id}")
                 # Get user details from Clerk
                 user_response = requests.get(
                     f"{CLERK_API_URL}/users/{user_id}",
@@ -63,7 +99,7 @@ def verify_clerk_token(token: str) -> dict | None:
                         'last_name': user_data.get('last_name')
                     }
         else:
-            print(f"Clerk verify failed: {response.text}")
+            print(f"Clerk verify failed: {response.status_code} - {response.text}")
         
         return None
     except Exception as e:
