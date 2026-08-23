@@ -287,7 +287,7 @@ def sync_notion_database(request: Request, database_id: str, db: Session = Depen
 def get_slack_install_url(current_user: User = Depends(get_current_user)):
     import json, base64
     state = base64.urlsafe_b64encode(json.dumps({"user_id": current_user.id}).encode()).decode()
-    return {"install_url": f"https://slack.com/oauth/v2/authorize?client_id={settings.SLACK_CLIENT_ID}&scope=channels:read,chat:write,search:read&redirect_uri={settings.SLACK_REDIRECT_URI}&state={state}"}
+    return {"install_url": f"https://slack.com/oauth/v2/authorize?client_id={settings.SLACK_CLIENT_ID}&scope=channels:read&redirect_uri={settings.SLACK_REDIRECT_URI}&state={state}"}
 
 @router.get("/integrations/slack/callback")
 def slack_callback(code: str, state: str = None, db: Session = Depends(get_db)):
