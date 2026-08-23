@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, ChatHistory, Citation, File, Chunk
@@ -9,11 +9,13 @@ from app.services.llm_service import llm_service
 from app.services.user_settings import get_user_api_keys
 from app.services.cache import get_cached_result, cache_result, get_cache_stats, clear_expired_cache
 from app.config import settings
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
 @router.post("/ask", response_model=AskResponse)
-def ask_question(request: AskRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@limiter.limit("30/minute")  # Rate limit: 30 chat requests per minute
+def ask_question(request: Request, request_data: AskRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Process a question and return an answer.
     
@@ -23,7 +25,7 @@ def ask_question(request: AskRequest, db: Session = Depends(get_db), current_use
     - Caches new results for future identical questions
     """
     # Check cache first
-    cached_result = get_cached_result(db, request.question)
+    cached_result = get_cached_result(db, request_data.question)
     
     if cached_result:
         # Return cached result
@@ -39,12 +41,12 @@ def ask_question(request: AskRequest, db: Session = Depends(get_db), current_use
         result["from_cache"] = False
         
         # Cache the result for future use
-        cache_result(db, request.question, result["answer"], result["sources"])
+        cache_result(db, request_data.question, result["answer"], result["sources"])
 
     # Save to chat history
     chat = ChatHistory(
         user_id=current_user.id,
-        question=request.question,
+        question=request_data.question,
         answer=result["answer"]
     )
     db.add(chat)
