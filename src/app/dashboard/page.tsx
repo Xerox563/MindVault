@@ -152,7 +152,13 @@ export default function Dashboard() {
     if (!token) return;
     try {
       const res = await fetch(`${API_URL}/api/integrations`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setIntegrations(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        console.log("Integrations:", data);
+        setIntegrations(data);
+      } else {
+        console.error("Failed to fetch integrations:", res.status);
+      }
     } catch (error) { console.error("Failed to fetch integrations:", error); }
   };
 

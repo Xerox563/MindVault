@@ -298,16 +298,3 @@ def sync_drive_file(request: Request, file_id: str, db: Session = Depends(get_db
         print(f"Error syncing Drive file: {e}")
         mark_sync_error(db, current_user.id, file_id, "google_drive", str(e))
         raise HTTPException(500, f"Failed to sync file: {str(e)}")
-
-@router.get("/integrations")
-def list_integrations(current_user: User = Depends(get_current_user)):
-    """Legacy endpoint - returns just Google Drive"""
-    return [
-        {
-            "id": "google_drive",
-            "name": "Google Drive",
-            "description": "Import files from your Google Drive into your knowledge base",
-            "icon": "drive",
-            "connected": bool(current_user.google_refresh_token),
-        }
-    ]
