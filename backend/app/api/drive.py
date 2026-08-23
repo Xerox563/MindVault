@@ -15,6 +15,7 @@ from app.services.sync import (
     mark_sync_error, get_synced_files_for_user
 )
 from app.models.user import File as FileModel
+from app.core.rate_limit import limiter
 from datetime import datetime
 
 router = APIRouter(prefix="/api", tags=["google"])
@@ -166,7 +167,8 @@ def drive_files(db: Session = Depends(get_db), current_user: User = Depends(get_
         raise HTTPException(500, f"Failed to list Google Drive files: {str(e)}")
 
 @router.post("/sync/drive/{file_id}")
-def sync_drive_file(file_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@limiter.limit("20/minute")  # Rate limit: 20 sync operations per minute
+def sync_drive_file(request: Request, file_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Sync a file from Google Drive using stored OAuth tokens with incremental sync"""
     from app.services.drive import get_drive_service
     from dateutil import parser
