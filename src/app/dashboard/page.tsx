@@ -517,8 +517,9 @@ export default function Dashboard() {
                           </div>
                         )}
                       </div>
-                      );
-                    })}</div>))}</div></motion.div></>)}</AnimatePresence>
+                      </>
+                    );
+                  })}</div></motion.div></>)}</AnimatePresence>
                   </div>
                   <input type="text" value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendMessage()} placeholder={files.length > 0 ? "Ask about your documents..." : "Upload files to start chatting"} disabled={files.length === 0} className="flex-1 bg-transparent px-3 py-3 text-white placeholder-gray-500 focus:outline-none disabled:opacity-50" />
                   <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white"><Mic className="w-4 h-4" /></button>
