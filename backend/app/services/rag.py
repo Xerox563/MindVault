@@ -5,11 +5,6 @@ from app.services.vectordb import search_similar
 from app.services.user_settings import get_user_api_keys, base_provider
 from app.config import settings
 
-# Chroma always returns the nearest n_results, even when nothing is actually
-# relevant (e.g. "hi" against a system-design PDF still returns its 5 nearest
-# chunks). Empirically, real matches for mistral-embed land under ~0.6 L2
-# distance while unrelated small talk lands above ~0.7 — chunks past this
-# cutoff are dropped so casual chat doesn't get dragged into document context.
 RELEVANCE_DISTANCE_THRESHOLD = 0.62
 
 def rag_query(db: Session, question: str, user: User) -> dict:
@@ -34,12 +29,11 @@ def rag_query(db: Session, question: str, user: User) -> dict:
                 sources.append({
                     "chunk_id": chunk_record.id,
                     "file_name": file.filename,
+                    "source_type": file.source_type or file.source or "local",
+                    "source": file.source or file.source_type or "local",
                     "content": chunk_record.content[:200]
                 })
 
-    # No matching chunks: fall through to a normal conversational reply (empty
-    # context) instead of hard-refusing, so small talk ("hi") still gets a
-    # response and only genuinely doc-related questions rely on retrieval.
     answer = get_chat_response(question, context, provider_id=provider_id, api_key=api_key, db=db, user_id=user.id)
 
     return {"answer": answer, "sources": sources}
