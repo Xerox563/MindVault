@@ -285,17 +285,33 @@ def sync_notion_database(request: Request, database_id: str, db: Session = Depen
 
 @router.get("/integrations/connect/slack")
 def get_slack_install_url(current_user: User = Depends(get_current_user)):
-    return {"install_url": f"https://slack.com/oauth/v2/authorize?client_id={settings.SLACK_CLIENT_ID}&scope=channels:history,channels:read,search:read&redirect_uri={settings.SLACK_REDIRECT_URI}"}
+    import json, base64
+    state = base64.urlsafe_b64encode(json.dumps({"user_id": current_user.id}).encode()).decode()
+    return {"install_url": f"https://slack.com/oauth/v2/authorize?client_id={settings.SLACK_CLIENT_ID}&scope=channels:history,channels:read,search:read&redirect_uri={settings.SLACK_REDIRECT_URI}&state={state}"}
 
-@router.post("/integrations/slack/callback")
-def slack_callback(code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/integrations/slack/callback")
+def slack_callback(code: str, state: str = None, db: Session = Depends(get_db)):
     from slack_sdk.web_client import WebClient
+    from app.models.user import User
     try:
         client = WebClient()
         response = client.oauth_v2_access(client_id=settings.SLACK_CLIENT_ID, client_secret=settings.SLACK_CLIENT_SECRET, code=code)
         token = response["access_token"]
-        current_user.slack_bot_token = token
-        db.commit()
+        
+        user_id = None
+        if state:
+            import json, base64
+            try:
+                state_data = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
+                user_id = state_data.get('user_id')
+            except: pass
+        
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                user.slack_bot_token = token
+                db.commit()
+        
         return {"message": "Slack connected successfully"}
     except Exception as e:
         log_error(f"Slack OAuth failed: {e}")
@@ -303,11 +319,14 @@ def slack_callback(code: str, db: Session = Depends(get_db), current_user: User 
 
 @router.get("/integrations/connect/notion")
 def get_notion_auth_url(current_user: User = Depends(get_current_user)):
-    return {"auth_url": f"https://api.notion.com/v1/oauth/authorize?client_id={settings.NOTION_CLIENT_ID}&response_type=code&owner=user&redirect_uri={settings.NOTION_REDIRECT_URI}"}
+    import json, base64
+    state = base64.urlsafe_b64encode(json.dumps({"user_id": current_user.id}).encode()).decode()
+    return {"auth_url": f"https://api.notion.com/v1/oauth/authorize?client_id={settings.NOTION_CLIENT_ID}&response_type=code&owner=user&redirect_uri={settings.NOTION_REDIRECT_URI}&state={state}"}
 
-@router.post("/integrations/notion/callback")
-def notion_callback(code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/integrations/notion/callback")
+def notion_callback(code: str, state: str = None, db: Session = Depends(get_db)):
     import requests
+    from app.models.user import User
     try:
         response = requests.post("https://api.notion.com/v1/oauth/token", data={
             "grant_type": "authorization_code",
@@ -317,8 +336,21 @@ def notion_callback(code: str, db: Session = Depends(get_db), current_user: User
             "client_secret": settings.NOTION_CLIENT_SECRET
         }, headers={"Content-Type": "application/x-www-form-urlencoded"})
         data = response.json()
-        current_user.notion_api_key = data.get("access_token")
-        db.commit()
+        
+        user_id = None
+        if state:
+            import json, base64
+            try:
+                state_data = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
+                user_id = state_data.get('user_id')
+            except: pass
+        
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                user.notion_api_key = data.get("access_token")
+                db.commit()
+        
         return {"message": "Notion connected successfully"}
     except Exception as e:
         log_error(f"Notion OAuth failed: {e}")
