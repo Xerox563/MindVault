@@ -174,30 +174,33 @@ export default function Dashboard() {
   };
 
   const connectIntegration = async (integrationId: string) => {
+    console.log("Connecting integration:", integrationId);
     const token = await getAuthToken();
-    if (!token) return;
+    if (!token) { console.log("No token"); alert("Not authenticated"); return; }
     setConnectingDrive(true);
+    let url = "";
     try {
       if (integrationId === "google_drive" || integrationId === "google_sheets") {
         const res = await fetch(`${API_URL}/api/auth/google/connect`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.auth_url) window.open(data.auth_url, "google-connect", "width=500,height=700");
-        }
+        const data = await res.json();
+        url = data.auth_url;
       } else if (integrationId === "slack") {
         const res = await fetch(`${API_URL}/api/integrations/connect/slack`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.install_url) window.open(data.install_url, "slack-connect", "width=500,height=700");
-        }
+        const data = await res.json();
+        url = data.install_url;
       } else if (integrationId === "notion") {
         const res = await fetch(`${API_URL}/api/integrations/connect/notion`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.auth_url) window.open(data.auth_url, "notion-connect", "width=500,height=700");
-        }
+        const data = await res.json();
+        url = data.auth_url;
       }
-    } catch (error) { console.error("Failed to connect integration:", error); }
+      console.log("Got URL:", url);
+      if (url) {
+        const popup = window.open(url, "integration-connect", "width=500,height=700");
+        if (!popup) alert("Popup blocked! Please allow popups for this site.");
+      } else {
+        alert("No URL returned from server");
+      }
+    } catch (error) { console.error("Failed:", error); alert("Error: " + error); }
     finally { setConnectingDrive(false); }
   };
 
