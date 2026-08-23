@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, File as FileModel
@@ -9,6 +9,7 @@ from app.config import settings
 from app.services.extractor import extract_text
 from app.services.processor import process_file
 from app.services.user_settings import get_user_api_keys, base_provider
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api", tags=["files"])
 
@@ -17,7 +18,9 @@ def validate_file(filename: str) -> bool:
     return ext in settings.ALLOWED_EXTENSIONS
 
 @router.post("/upload", response_model=FileResponse)
+@limiter.limit("10/minute")  # Rate limit: 10 uploads per minute (expensive operation)
 async def upload_file(
+    request: Request,
     uploaded_file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
