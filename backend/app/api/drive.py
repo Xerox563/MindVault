@@ -301,7 +301,7 @@ def sync_drive_file(request: Request, file_id: str, db: Session = Depends(get_db
 
 @router.get("/integrations")
 def list_integrations(current_user: User = Depends(get_current_user)):
-    """List available third-party integrations and whether the current user has connected them."""
+    """Legacy endpoint - returns just Google Drive"""
     return [
         {
             "id": "google_drive",

@@ -60,7 +60,8 @@ def ask_question(request: Request, request_data: AskRequest, db: Session = Depen
             citation = Citation(
                 chat_id=chat.id,
                 chunk_id=chunk.id,
-                file_id=chunk.file_id
+                file_id=chunk.file_id,
+                source_type=source.get("source_type") or source.get("source") or "local"
             )
             db.add(citation)
     db.commit()
