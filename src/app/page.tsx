@@ -26,6 +26,7 @@ import {
   StaggerItem,
   SpotlightCard
 } from "@/components/animations";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function LandingPage() {
   const heroRef = useRef<HTMLDivElement>(null);
@@ -75,7 +76,8 @@ export default function LandingPage() {
             ))}
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Link href="/login">
               <motion.button
                 className="text-sm text-gray-300 hover:text-white transition-colors"
