@@ -173,19 +173,35 @@ export default function Dashboard() {
     finally { setDriveFilesLoading(false); }
   };
 
-  const connectGoogleDrive = async () => {
+  const connectIntegration = async (integrationId: string) => {
     const token = await getAuthToken();
     if (!token) return;
     setConnectingDrive(true);
     try {
-      const res = await fetch(`${API_URL}/api/auth/google/connect`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.auth_url) window.open(data.auth_url, "google-drive-connect", "width=500,height=700");
+      if (integrationId === "google_drive" || integrationId === "google_sheets") {
+        const res = await fetch(`${API_URL}/api/auth/google/connect`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.auth_url) window.open(data.auth_url, "google-connect", "width=500,height=700");
+        }
+      } else if (integrationId === "slack") {
+        const res = await fetch(`${API_URL}/api/integrations/connect/slack`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.install_url) window.open(data.install_url, "slack-connect", "width=500,height=700");
+        }
+      } else if (integrationId === "notion") {
+        const res = await fetch(`${API_URL}/api/integrations/connect/notion`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.auth_url) window.open(data.auth_url, "notion-connect", "width=500,height=700");
+        }
       }
-    } catch (error) { console.error("Failed to start Google Drive connection:", error); }
+    } catch (error) { console.error("Failed to connect integration:", error); }
     finally { setConnectingDrive(false); }
   };
+
+  const connectGoogleDrive = async () => connectIntegration("google_drive");
 
   const syncDriveFile = async (fileId: string) => {
     const token = await getAuthToken();
@@ -479,9 +495,7 @@ export default function Dashboard() {
                             </span>
                           ) : (
                             <motion.button
-                              onClick={() => {
-                                if (integration.id === "google_drive") connectGoogleDrive();
-                              }}
+                              onClick={() => connectIntegration(integration.id)}
                               disabled={connectingDrive}
                               whileHover={{ scale: 1.02 }}
                               className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50 shrink-0"
