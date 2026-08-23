@@ -11,6 +11,8 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     google_token = Column(String, nullable=True)
     google_refresh_token = Column(String, nullable=True)
+    slack_bot_token = Column(String, nullable=True)
+    notion_api_key = Column(String, nullable=True)
     preferred_provider = Column(String, nullable=True)
     api_keys_encrypted = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -29,6 +31,8 @@ class File(Base):
     file_size = Column(Integer, nullable=False)
     extracted_text = Column(Text, nullable=True)
     source = Column(String, default="local")
+    source_type = Column(String, default="local")
+    external_id = Column(String, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="files")
@@ -76,6 +80,7 @@ class Citation(Base):
     chat_id = Column(Integer, ForeignKey("chat_history.id"), nullable=False)
     chunk_id = Column(Integer, ForeignKey("chunks.id"), nullable=False)
     file_id = Column(Integer, ForeignKey("files.id"), nullable=False)
+    source_type = Column(String, default="local")
     confidence_score = Column(Float, nullable=True)
 
     chat = relationship("ChatHistory", back_populates="citations")

@@ -36,7 +36,13 @@ class Settings(BaseSettings):
     OLLAMA_HOST: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
-    ENABLE_HYBRID_LLM: bool = False  # Show both cloud and local models
+    ENABLE_HYBRID_LLM: bool = False
+    SLACK_CLIENT_ID: str = ""
+    SLACK_CLIENT_SECRET: str = ""
+    SLACK_REDIRECT_URI: str = "http://localhost:8000/api/integrations/slack/callback"
+    NOTION_CLIENT_ID: str = ""
+    NOTION_CLIENT_SECRET: str = ""
+    NOTION_REDIRECT_URI: str = "http://localhost:8000/api/integrations/notion/callback"
 
     class Config:
         env_file = ".env"
