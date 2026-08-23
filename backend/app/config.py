@@ -8,10 +8,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24
     UPLOAD_DIR: str = "data/uploads"
-    # Point this at a mounted persistent disk in production (e.g. Render disk
-    # mounted at /data -> CHROMA_PERSIST_DIR=/data/chroma). Left as a relative
-    # local path by default so it just works in local dev.
-    CHROMA_PERSIST_DIR: str = "data/chroma"
+    # ChromaDB persistence directory
+    # In production (Render), use /tmp for ephemeral storage or mount a disk
+    # For local dev, use relative path
+    CHROMA_PERSIST_DIR: str = "/tmp/chroma" if os.environ.get("RENDER") else "data/chroma"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".xlsx", ".txt"]
     GOOGLE_CLIENT_ID: str = ""
