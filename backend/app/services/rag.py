@@ -16,7 +16,7 @@ def rag_query(db: Session, question: str, user: User) -> dict:
     provider_id = user.preferred_provider or settings.LLM_PROVIDER
     api_key = get_user_api_keys(user).get(base_provider(provider_id))
 
-    query_embedding = get_embedding(question, provider_id=provider_id, api_key=api_key)
+    query_embedding = get_embedding(question, provider_id=provider_id, api_key=api_key, db=db, user_id=user.id)
     if not query_embedding:
         return {"answer": "Embedding generation failed. Check your model configuration in Settings.", "sources": []}
 
@@ -40,6 +40,6 @@ def rag_query(db: Session, question: str, user: User) -> dict:
     # No matching chunks: fall through to a normal conversational reply (empty
     # context) instead of hard-refusing, so small talk ("hi") still gets a
     # response and only genuinely doc-related questions rely on retrieval.
-    answer = get_chat_response(question, context, provider_id=provider_id, api_key=api_key)
+    answer = get_chat_response(question, context, provider_id=provider_id, api_key=api_key, db=db, user_id=user.id)
 
     return {"answer": answer, "sources": sources}
