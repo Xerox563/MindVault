@@ -129,7 +129,7 @@ class CostTracking(Base):
     total_tokens = Column(Integer, default=0)
     cost_usd = Column(Numeric(10, 6), default=0.0)  # Cost in USD with 6 decimal places
     request_count = Column(Integer, default=1)
-    metadata = Column(Text, nullable=True)  # JSON string for additional data
+    extra_data = Column(Text, nullable=True)  # JSON string for additional data
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", backref="cost_tracking")

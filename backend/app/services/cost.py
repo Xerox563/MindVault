@@ -92,7 +92,7 @@ def track_cost(
             output_tokens=output_tokens,
             total_tokens=total_tokens,
             cost_usd=cost,
-            metadata=str(metadata) if metadata else None,
+            extra_data=str(metadata) if metadata else None,
             created_at=datetime.utcnow()
         )
         
