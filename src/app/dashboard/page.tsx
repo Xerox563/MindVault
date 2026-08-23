@@ -667,6 +667,18 @@ export default function Dashboard() {
           </motion.button>
 
           <div className="flex items-center gap-2">
+            <Link href="/cost">
+              <motion.button
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Cost Monitoring"
+              >
+                <DollarSign className="w-4 h-4" />
+                <span className="hidden sm:inline">Costs</span>
+              </motion.button>
+            </Link>
+            
             <motion.button
               onClick={openSettings}
               className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
