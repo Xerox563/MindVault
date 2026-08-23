@@ -571,7 +571,11 @@ function Footer() {
 }
 
 export default function LandingPage() {
-  const { theme } = useTheme();
+  const { theme, mounted } = useTheme();
+
+  if (!mounted) {
+    return <div className="min-h-screen bg-[#0a0a0a] text-white" />;
+  }
 
   return (
     <div className={`min-h-screen ${theme === "dark" ? "bg-[#0a0a0a]" : "bg-gradient-to-br from-slate-50 to-slate-100"} text-white overflow-x-hidden transition-colors duration-300`}>

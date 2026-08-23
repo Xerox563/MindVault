@@ -5,7 +5,11 @@ import { Sun, Moon } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, mounted } = useTheme();
+
+  if (!mounted) {
+    return <div className={`w-12 h-12 ${className}`} />;
+  }
 
   return (
     <motion.button
