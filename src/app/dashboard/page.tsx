@@ -33,7 +33,8 @@ import {
   Key,
   Trash2,
   RefreshCw,
-  Link2
+  Link2,
+  Sparkles
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -51,6 +52,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
+  timestamp?: string;
 }
 
 interface Source {
@@ -111,6 +113,17 @@ const formatDate = (dateStr?: string) => {
   const date = new Date(dateStr);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${months[date.getMonth()]} ${date.getDate()}`;
+};
+
+// Get current time in AM/PM format
+const getCurrentTime = () => {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const formattedHours = hours % 12 || 12;
+  const formattedMinutes = minutes.toString().padStart(2, '0');
+  return `${formattedHours}:${formattedMinutes} ${ampm}`;
 };
 
 export default function Dashboard() {
@@ -224,7 +237,6 @@ export default function Dashboard() {
       });
       
       if (res.ok) {
-        // Update local state
         const provider = providers.find(p => p.id === providerId);
         if (provider) {
           setSelectedProvider(provider);
@@ -448,6 +460,7 @@ export default function Dashboard() {
       id: Date.now().toString(),
       role: "user",
       content: inputMessage,
+      timestamp: getCurrentTime(),
     };
     
     setMessages((prev) => [...prev, userMessage]);
@@ -472,6 +485,7 @@ export default function Dashboard() {
           role: "assistant",
           content: data.answer,
           sources: data.sources,
+          timestamp: getCurrentTime(),
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else {
@@ -480,6 +494,7 @@ export default function Dashboard() {
           id: (Date.now() + 1).toString(),
           role: "assistant",
           content: `Error: ${error.detail || "Failed to get response"}`,
+          timestamp: getCurrentTime(),
         };
         setMessages((prev) => [...prev, errorMessage]);
       }
@@ -489,6 +504,7 @@ export default function Dashboard() {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: "Sorry, I couldn't process your request. Please try again.",
+        timestamp: getCurrentTime(),
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -498,7 +514,7 @@ export default function Dashboard() {
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
+      <div className="min-h-screen bg-[#111111] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
       </div>
     );
@@ -506,7 +522,7 @@ export default function Dashboard() {
 
   if (!isSignedIn) {
     return (
-      <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-[#111111] flex flex-col items-center justify-center">
         <p className="text-white mb-4">Please sign in to access the dashboard</p>
         <Link href="/login">
           <button className="px-6 py-3 bg-purple-600 rounded-lg text-white font-medium hover:bg-purple-700">
@@ -518,7 +534,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] text-white flex">
+    <div className="min-h-screen bg-[#111111] text-white flex">
       {/* Left Sidebar - Files Only */}
       <AnimatePresence mode="wait">
         {sidebarOpen && (
@@ -527,7 +543,7 @@ export default function Dashboard() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -280, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="w-[280px] border-r border-white/10 flex flex-col h-screen bg-[#0d0d0d]"
+            className="w-[280px] border-r border-white/10 flex flex-col h-screen bg-[#111111]"
           >
             {/* Logo */}
             <div className="p-4 border-b border-white/10">
@@ -633,7 +649,7 @@ export default function Dashboard() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Header */}
-        <header className="h-14 border-b border-white/10 flex items-center justify-between px-4 bg-[#0d0d0d]/80 backdrop-blur-md">
+        <header className="h-14 border-b border-white/10 flex items-center justify-between px-4 bg-[#111111]/80 backdrop-blur-md">
           <motion.button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
@@ -715,63 +731,87 @@ export default function Dashboard() {
               </motion.div>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              {messages.map((message) => (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div className={`max-w-3xl ${message.role === "user" ? "items-end" : "items-start"}`}>
-                    <div className={`p-4 rounded-2xl ${
-                      message.role === "user" 
-                        ? "bg-white/10 border border-white/10" 
-                        : "bg-transparent"
-                    }`}>
-                      <div className="text-white leading-relaxed text-[15px]">
-                        <ReactMarkdown
-                          components={{
-                            p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
-                            h1: ({ children }) => <h1 className="text-xl font-semibold mt-4 mb-2 first:mt-0">{children}</h1>,
-                            h2: ({ children }) => <h2 className="text-lg font-semibold mt-4 mb-2 first:mt-0">{children}</h2>,
-                            h3: ({ children }) => <h3 className="text-base font-semibold mt-3 mb-1.5 first:mt-0">{children}</h3>,
-                            strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-                            ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
-                            ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
-                            li: ({ children }) => <li>{children}</li>,
-                            code: ({ children }) => <code className="bg-white/10 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>,
-                            pre: ({ children }) => <pre className="bg-white/5 border border-white/10 rounded-lg p-3 overflow-x-auto mb-3 text-sm">{children}</pre>,
-                            a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">{children}</a>,
-                          }}
-                        >
+            <div className="flex-1 overflow-y-auto px-4 py-6">
+              {messages.map((message, index) => (
+                <div key={message.id} className="mb-6">
+                  {message.role === "user" ? (
+                    // User Message - Top Right
+                    <div className="flex justify-end mb-2">
+                      <div className="max-w-[85%] md:max-w-[70%]">
+                        <div className="bg-[#2d2d2d] rounded-2xl rounded-tr-sm px-5 py-3 text-[15px]">
                           {message.content}
-                        </ReactMarkdown>
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                          <span className="text-xs text-gray-500">{message.timestamp}</span>
+                          <Check className="w-3.5 h-3.5 text-gray-500" />
+                        </div>
                       </div>
                     </div>
-                    {message.sources && message.sources.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <p className="text-xs text-gray-500 mb-2">Sources</p>
-                        {message.sources.map((source, i) => (
-                          <motion.div
-                            key={i}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: i * 0.1 }}
-                            className="flex items-center gap-2 p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 cursor-pointer"
-                          >
-                            <FileText className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm text-gray-300">{source.filename}</span>
-                          </motion.div>
-                        ))}
+                  ) : (
+                    // Assistant Message - Left
+                    <div className="flex gap-3 max-w-[90%]">
+                      {/* AI Icon */}
+                      <div className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center">
+                        <Sparkles className="w-4 h-4 text-white" />
                       </div>
-                    )}
-                  </div>
-                </motion.div>
+                      
+                      {/* Content */}
+                      <div className="flex-1">
+                        <div className="bg-[#1a1a1a] rounded-2xl rounded-tl-sm px-5 py-4 border border-white/5">
+                          <div className="text-[15px] leading-relaxed text-gray-200">
+                            <ReactMarkdown
+                              components={{
+                                p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                                h1: ({ children }) => <h1 className="text-lg font-semibold mt-3 mb-2 first:mt-0">{children}</h1>,
+                                h2: ({ children }) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0">{children}</h2>,
+                                h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1 first:mt-0">{children}</h3>,
+                                strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+                                ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>,
+                                ol: ({ children }) => <ol className="list-disc pl-5 mb-3 space-y-1.5">{children}</ol>,
+                                li: ({ children }) => <li className="text-gray-300">{children}</li>,
+                                code: ({ children }) => <code className="bg-white/10 px-1.5 py-0.5 rounded text-sm font-mono text-gray-300">{children}</code>,
+                                pre: ({ children }) => <pre className="bg-white/5 border border-white/10 rounded-lg p-3 overflow-x-auto mb-3 text-sm">{children}</pre>,
+                                a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">{children}</a>,
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                        
+                        {/* Timestamp */}
+                        <div className="mt-1.5">
+                          <span className="text-xs text-gray-500">{message.timestamp}</span>
+                        </div>
+                        
+                        {/* Sources */}
+                        {message.sources && message.sources.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-sm text-gray-400 mb-2">Sources</p>
+                            <div className="flex flex-wrap gap-2">
+                              {message.sources.map((source, i) => (
+                                <motion.div
+                                  key={i}
+                                  initial={{ opacity: 0, y: 5 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ delay: i * 0.1 }}
+                                  className="flex items-center gap-2 px-3 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
+                                >
+                                  <FileText className="w-4 h-4 text-gray-500" />
+                                  <span className="text-sm text-gray-300">{source.filename}</span>
+                                </motion.div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
               {isLoading && (
-                <div className="flex justify-start">
-                  <div className="flex items-center gap-2 p-4">
+                <div className="flex justify-start pl-11">
+                  <div className="flex items-center gap-1.5 py-4">
                     <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
                     <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100" />
                     <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200" />
@@ -1027,7 +1067,7 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* Settings Panel — manage per-provider API keys */}
+      {/* Settings Panel */}
       <AnimatePresence>
         {showSettings && (
           <>
