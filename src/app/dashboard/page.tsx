@@ -27,6 +27,8 @@ interface DriveFile { id: string; name: string; mimeType: string; synced?: boole
 const PROVIDER_LABELS: Record<string, string> = { mistral: "Mistral AI", ollama: "Ollama" };
 const SOURCE_ICONS: Record<string, React.ElementType> = { local: FileIcon, drive: Cloud, sheets: Table, slack: Hash, notion: FileJson };
 const SOURCE_COLORS: Record<string, string> = { local: "text-gray-400", drive: "text-blue-400", sheets: "text-green-400", slack: "text-purple-400", notion: "text-yellow-400" };
+const INTEGRATION_ICONS: Record<string, React.ElementType> = { google_drive: Cloud, google_sheets: Table, slack: Hash, notion: FileJson };
+const INTEGRATION_COLORS: Record<string, string> = { google_drive: "text-blue-400", google_sheets: "text-green-400", slack: "text-purple-400", notion: "text-yellow-400" };
 
 const FileTypeIcon = ({ type, className = "" }: { type: string; className?: string }) => {
   if (type?.includes('pdf')) return <FileText className={`${className} text-red-400`} />;
@@ -450,7 +452,73 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 p-2">
                   <div className="relative">
                     <motion.button onClick={openIntegrations} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-8 h-8 flex items-center justify-center border border-white/20 rounded-xl hover:bg-white/10 text-gray-400" title="Integrations"><Plus className="w-4 h-4" /></motion.button>
-                    <AnimatePresence>{showIntegrations && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowIntegrations(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="absolute left-0 bottom-full mb-2 w-[420px] max-h-[500px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Integrations</h3><button onClick={() => setShowIntegrations(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 max-h-[420px] overflow-y-auto space-y-4">{integrations.map((integration) => (<div key={integration.id} className="border border-white/10 rounded-xl p-3"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center"><Cloud className="w-4 h-4 text-blue-400" /></div><div><p className="font-medium text-sm">{integration.name}</p><p className="text-xs text-gray-500">{integration.description}</p></div></div>{integration.connected ? (<span className="text-xs text-green-400 flex items-center gap-1 shrink-0"><Check className="w-3 h-3" />Connected</span>) : (<motion.button onClick={connectGoogleDrive} disabled={connectingDrive} whileHover={{ scale: 1.02 }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50 shrink-0">{connectingDrive ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3" />}Connect</motion.button>)}</div>{integration.connected && integration.id === "google_drive" && (<div className="mt-3 space-y-1"><div className="flex items-center justify-between mb-1"><p className="text-xs text-gray-500">Files in your Drive</p><button onClick={fetchDriveFiles} className="text-gray-500 hover:text-white"><RefreshCw className={`w-3 h-3 ${driveFilesLoading ? "animate-spin" : ""}`} /></button></div>{driveFilesLoading ? <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-gray-500" /></div> : driveFiles.length === 0 ? <p className="text-xs text-gray-500 py-2">No files found</p> : driveFiles.map((file) => (<div key={file.id} className="flex items-center gap-2 p-2 bg-white/5 rounded-lg"><FileText className="w-4 h-4 text-gray-400 shrink-0" /><span className="flex-1 text-sm truncate">{file.name}</span><button onClick={() => syncDriveFile(file.id)} disabled={syncingFileId === file.id} className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded disabled:opacity-50">{syncingFileId === file.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "Import"}</button></div>))}</div>)}</div>))}</div></motion.div></>)}</AnimatePresence>
+                    <AnimatePresence>{showIntegrations && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowIntegrations(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="absolute left-0 bottom-full mb-2 w-[420px] max-h-[500px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Integrations</h3><button onClick={() => setShowIntegrations(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 max-h-[420px] overflow-y-auto space-y-4">{integrations.map((integration) => {
+                      const IntIcon = INTEGRATION_ICONS[integration.id] || Cloud;
+                      const intColor = INTEGRATION_COLORS[integration.id] || "text-blue-400";
+                      return (
+                      <div key={integration.id} className="border border-white/10 rounded-xl p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                              <IntIcon className={`w-4 h-4 ${intColor}`} />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{integration.name}</p>
+                              <p className="text-xs text-gray-500">{integration.description}</p>
+                            </div>
+                          </div>
+                          {integration.connected ? (
+                            <span className="text-xs text-green-400 flex items-center gap-1 shrink-0">
+                              <Check className="w-3 h-3" />Connected
+                            </span>
+                          ) : (
+                            <motion.button
+                              onClick={() => {
+                                if (integration.id === "google_drive") connectGoogleDrive();
+                              }}
+                              disabled={connectingDrive}
+                              whileHover={{ scale: 1.02 }}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50 shrink-0"
+                            >
+                              {connectingDrive ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3" />}
+                              Connect
+                            </motion.button>
+                          )}
+                        </div>
+                        {integration.connected && integration.id === "google_drive" && (
+                          <div className="mt-3 space-y-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-xs text-gray-500">Files in your Drive</p>
+                              <button onClick={fetchDriveFiles} className="text-gray-500 hover:text-white">
+                                <RefreshCw className={`w-3 h-3 ${driveFilesLoading ? "animate-spin" : ""}`} />
+                              </button>
+                            </div>
+                            {driveFilesLoading ? (
+                              <div className="flex justify-center py-3">
+                                <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                              </div>
+                            ) : driveFiles.length === 0 ? (
+                              <p className="text-xs text-gray-500 py-2">No files found</p>
+                            ) : (
+                              driveFiles.map((file) => (
+                                <div key={file.id} className="flex items-center gap-2 p-2 bg-white/5 rounded-lg">
+                                  <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                                  <span className="flex-1 text-sm truncate">{file.name}</span>
+                                  <button
+                                    onClick={() => syncDriveFile(file.id)}
+                                    disabled={syncingFileId === file.id}
+                                    className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded disabled:opacity-50"
+                                  >
+                                    {syncingFileId === file.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "Import"}
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      );
+                    })}</div>))}</div></motion.div></>)}</AnimatePresence>
                   </div>
                   <input type="text" value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendMessage()} placeholder={files.length > 0 ? "Ask about your documents..." : "Upload files to start chatting"} disabled={files.length === 0} className="flex-1 bg-transparent px-3 py-3 text-white placeholder-gray-500 focus:outline-none disabled:opacity-50" />
                   <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white"><Mic className="w-4 h-4" /></button>
