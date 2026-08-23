@@ -53,12 +53,17 @@ interface Message {
   content: string;
   sources?: Source[];
   timestamp?: string;
+  fromCache?: boolean;
+  cacheHits?: number;
 }
 
 interface Source {
-  filename: string;
+  filename?: string;
+  file_name?: string;
   page?: string;
   file_id?: number;
+  chunk_id?: number;
+  content?: string;
 }
 
 interface LLMProvider {
@@ -486,6 +491,8 @@ export default function Dashboard() {
           content: data.answer,
           sources: data.sources,
           timestamp: getCurrentTime(),
+          fromCache: data.from_cache,
+          cacheHits: data.cache_hits,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else {
@@ -749,7 +756,12 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     // Assistant Message - Left
-                    <div className="flex gap-3 max-w-[90%]">
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="flex gap-3 max-w-[90%]"
+                    >
                       {/* AI Icon */}
                       <div className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center">
                         <Sparkles className="w-4 h-4 text-white" />
@@ -779,9 +791,18 @@ export default function Dashboard() {
                           </div>
                         </div>
                         
-                        {/* Timestamp */}
-                        <div className="mt-1.5">
+                        {/* Timestamp & Cache indicator */}
+                        <div className="mt-1.5 flex items-center gap-2">
                           <span className="text-xs text-gray-500">{message.timestamp}</span>
+                          {message.fromCache && (
+                            <span className="text-[10px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <Zap className="w-3 h-3" />
+                              Cached
+                              {message.cacheHits && message.cacheHits > 1 && (
+                                <span className="text-green-500">({message.cacheHits} hits)</span>
+                              )}
+                            </span>
+                          )}
                         </div>
                         
                         {/* Sources */}
@@ -794,30 +815,82 @@ export default function Dashboard() {
                                   key={i}
                                   initial={{ opacity: 0, y: 5 }}
                                   animate={{ opacity: 1, y: 0 }}
-                                  transition={{ delay: i * 0.1 }}
+                                  transition={{ delay: i * 0.1, duration: 0.3 }}
                                   className="flex items-center gap-2 px-3 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
                                 >
                                   <FileText className="w-4 h-4 text-gray-500" />
-                                  <span className="text-sm text-gray-300">{source.filename}</span>
+                                  <span className="text-sm text-gray-300">{source.file_name || source.filename}</span>
                                 </motion.div>
                               ))}
                             </div>
                           </div>
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   )}
                 </div>
               ))}
-              {isLoading && (
-                <div className="flex justify-start pl-11">
-                  <div className="flex items-center gap-1.5 py-4">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100" />
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200" />
-                  </div>
-                </div>
-              )}
+              {/* Loading Animation */}
+              <AnimatePresence>
+                {isLoading && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex gap-3 mb-6"
+                  >
+                    {/* AI Icon */}
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                    
+                    {/* Loading Content */}
+                    <div className="flex-1">
+                      <div className="bg-[#1a1a1a] rounded-2xl rounded-tl-sm px-5 py-4 border border-white/5 min-w-[200px]">
+                        <div className="flex items-center gap-1.5">
+                          <motion.div 
+                            className="w-2 h-2 bg-purple-500 rounded-full"
+                            animate={{ 
+                              scale: [1, 1.2, 1],
+                              opacity: [0.5, 1, 0.5]
+                            }}
+                            transition={{ 
+                              duration: 1.4, 
+                              repeat: Infinity,
+                              delay: 0 
+                            }}
+                          />
+                          <motion.div 
+                            className="w-2 h-2 bg-purple-500 rounded-full"
+                            animate={{ 
+                              scale: [1, 1.2, 1],
+                              opacity: [0.5, 1, 0.5]
+                            }}
+                            transition={{ 
+                              duration: 1.4, 
+                              repeat: Infinity,
+                              delay: 0.2 
+                            }}
+                          />
+                          <motion.div 
+                            className="w-2 h-2 bg-purple-500 rounded-full"
+                            animate={{ 
+                              scale: [1, 1.2, 1],
+                              opacity: [0.5, 1, 0.5]
+                            }}
+                            transition={{ 
+                              duration: 1.4, 
+                              repeat: Infinity,
+                              delay: 0.4 
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 

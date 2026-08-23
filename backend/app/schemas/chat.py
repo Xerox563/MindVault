@@ -35,3 +35,5 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     answer: str
     sources: list[dict]
+    from_cache: bool = False
+    cache_hits: int = 0

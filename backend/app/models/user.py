@@ -79,3 +79,17 @@ class Citation(Base):
     confidence_score = Column(Float, nullable=True)
 
     chat = relationship("ChatHistory", back_populates="citations")
+
+class QueryCache(Base):
+    """Cache for query results to reduce LLM costs and improve response time"""
+    __tablename__ = "query_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    query_hash = Column(String(64), unique=True, index=True, nullable=False)  # SHA-256 hash of normalized question
+    question = Column(Text, nullable=False)  # Original question text
+    answer = Column(Text, nullable=False)
+    sources = Column(Text, nullable=True)  # JSON string of sources
+    hit_count = Column(Integer, default=1)  # Number of times this cache entry was used
+    last_accessed = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)  # Optional expiration
