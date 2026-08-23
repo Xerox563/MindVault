@@ -37,7 +37,7 @@ def ask_question(request: Request, request_data: AskRequest, db: Session = Depen
         }
     else:
         # No cache hit - call LLM
-        result = rag_query(db, request.question, current_user)
+        result = rag_query(db, request_data.question, current_user)
         result["from_cache"] = False
         
         # Cache the result for future use
