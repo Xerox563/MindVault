@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, Numeric
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -116,3 +116,36 @@ class SyncedFile(Base):
         # Composite unique constraint: one external file per user per source
         {' UniqueConstraint': ('user_id', 'external_id', 'source')},
     )
+
+class CostTracking(Base):
+    """Track LLM API usage and costs per user"""
+    __tablename__ = "cost_tracking"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    provider = Column(String, nullable=False)  # 'mistral', 'ollama', etc.
+    operation = Column(String, nullable=False)  # 'chat', 'embedding', 'token_usage'
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    cost_usd = Column(Numeric(10, 6), default=0.0)  # Cost in USD with 6 decimal places
+    request_count = Column(Integer, default=1)
+    metadata = Column(Text, nullable=True)  # JSON string for additional data
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", backref="cost_tracking")
+
+class BudgetSetting(Base):
+    """User budget settings and alerts"""
+    __tablename__ = "budget_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    monthly_budget = Column(Numeric(10, 2), default=50.00)  # Monthly budget in USD
+    alert_threshold = Column(Numeric(5, 2), default=0.80)  # Alert at 80% of budget
+    alert_email = Column(String, nullable=True)
+    last_alert_sent = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User", backref="budget_setting", uselist=False)
