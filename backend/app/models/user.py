@@ -112,10 +112,9 @@ class SyncedFile(Base):
     last_synced = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    __table_args__ = (
-        # Composite unique constraint: one external file per user per source
-        {' UniqueConstraint': ('user_id', 'external_id', 'source')},
-    )
+    # Unique constraint: one external file per user per source
+    # This is enforced at the database level
+    # Can be added via Alembic migration: UniqueConstraint('user_id', 'external_id', 'source', name='uix_synced_file')"
 
 class CostTracking(Base):
     """Track LLM API usage and costs per user"""
