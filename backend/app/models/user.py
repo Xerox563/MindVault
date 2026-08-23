@@ -93,3 +93,26 @@ class QueryCache(Base):
     last_accessed = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)  # Optional expiration
+
+class SyncedFile(Base):
+    """Track synced files from external sources (Google Drive, etc.)"""
+    __tablename__ = "synced_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    external_id = Column(String, nullable=False)  # Google Drive file ID, etc.
+    source = Column(String, nullable=False)  # 'google_drive', 'dropbox', etc.
+    filename = Column(String, nullable=False)
+    mime_type = Column(String, nullable=True)
+    size = Column(Integer, nullable=True)  # File size in bytes
+    checksum = Column(String, nullable=True)  # MD5 or SHA hash for change detection
+    last_modified = Column(DateTime, nullable=True)  # Last modified time from source
+    local_file_id = Column(Integer, ForeignKey("files.id"), nullable=True)  # Reference to local File
+    sync_status = Column(String, default="active")  # active, error, deleted
+    last_synced = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        # Composite unique constraint: one external file per user per source
+        {' UniqueConstraint': ('user_id', 'external_id', 'source')},
+    )
