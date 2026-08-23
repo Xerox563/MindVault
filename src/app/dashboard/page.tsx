@@ -34,7 +34,8 @@ import {
   Trash2,
   RefreshCw,
   Link2,
-  Sparkles
+  Sparkles,
+  DollarSign
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
