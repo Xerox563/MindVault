@@ -12,15 +12,17 @@ def estimate_tokens(text: str) -> int:
 @retry(max_attempts=3, delay=1.0)
 def get_embedding(text: str, provider_id: Optional[str] = None, api_key: Optional[str] = None, db=None, user_id: int = None) -> list[float]:
     """Generate embedding using the given (or default) LLM provider"""
-    embedding = llm_service.generate_embedding(text, provider_id=provider_id or settings.LLM_PROVIDER, api_key=api_key)
+    embedding, usage = llm_service.generate_embedding(text, provider_id=provider_id or settings.LLM_PROVIDER, api_key=api_key)
     if embedding:
         log_info(f"Generated embedding for text length {len(text)}")
-        
+
         # Track cost if db and user_id provided
         if db and user_id:
             try:
                 from app.services.cost import track_cost
-                input_tokens = estimate_tokens(text)
+                input_tokens = usage.get("prompt_tokens") if usage else None
+                if input_tokens is None:
+                    input_tokens = estimate_tokens(text)
                 track_cost(
                     db=db,
                     user_id=user_id,
@@ -31,21 +33,25 @@ def get_embedding(text: str, provider_id: Optional[str] = None, api_key: Optiona
                 )
             except Exception as e:
                 log_error(f"Failed to track embedding cost: {e}")
-    
+
     return embedding
 
 @retry(max_attempts=3, delay=1.0)
 def get_chat_response(prompt: str, context: str = "", provider_id: Optional[str] = None, api_key: Optional[str] = None, db=None, user_id: int = None) -> str:
     """Generate chat response using the given (or default) LLM provider"""
-    response = llm_service.generate_chat_response(prompt, context, provider_id=provider_id or settings.LLM_PROVIDER, api_key=api_key)
+    response, usage = llm_service.generate_chat_response(prompt, context, provider_id=provider_id or settings.LLM_PROVIDER, api_key=api_key)
     log_info(f"Generated chat response for question length {len(prompt)}")
-    
+
     # Track cost if db and user_id provided
     if db and user_id:
         try:
             from app.services.cost import track_cost
-            input_tokens = estimate_tokens(context) + estimate_tokens(prompt)
-            output_tokens = estimate_tokens(response)
+            if usage:
+                input_tokens = usage.get("prompt_tokens", 0)
+                output_tokens = usage.get("completion_tokens", 0)
+            else:
+                input_tokens = estimate_tokens(context) + estimate_tokens(prompt)
+                output_tokens = estimate_tokens(response)
             track_cost(
                 db=db,
                 user_id=user_id,
@@ -56,5 +62,5 @@ def get_chat_response(prompt: str, context: str = "", provider_id: Optional[str]
             )
         except Exception as e:
             log_error(f"Failed to track chat cost: {e}")
-    
+
     return response

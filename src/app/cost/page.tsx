@@ -102,7 +102,9 @@ const getProviderColor = (provider: string) => {
     'openai': 'bg-purple-500',
     'default': 'bg-gray-500'
   };
-  return colors[provider.toLowerCase()] || colors.default;
+  const key = provider.toLowerCase();
+  if (key.startsWith('ollama')) return colors.ollama;
+  return colors[key] || colors.default;
 };
 
 export default function CostDashboard() {

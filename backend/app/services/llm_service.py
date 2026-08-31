@@ -88,7 +88,10 @@ class LLMService:
 
         return available
 
-    def generate_chat_response(self, prompt: str, context: str = "", provider_id: str = "mistral", api_key: Optional[str] = None) -> str:
+    def generate_chat_response(self, prompt: str, context: str = "", provider_id: str = "mistral", api_key: Optional[str] = None) -> tuple[str, Optional[Dict[str, int]]]:
+        """Returns (response_text, usage) where usage is {"prompt_tokens", "completion_tokens"}
+        taken from the provider's own accounting, or None if the provider doesn't report it
+        (callers should fall back to estimating from text length)."""
         try:
             if context.strip():
                 messages = [
@@ -104,46 +107,61 @@ class LLMService:
             if provider_id.startswith('ollama'):
                 client = self._ollama_client()
                 if not client:
-                    return "Ollama is not running or not reachable. Start it and try again."
+                    return "Ollama is not running or not reachable. Start it and try again.", None
                 model = provider_id[len('ollama-'):] if provider_id.startswith('ollama-') and provider_id != 'ollama' else self.providers['ollama']['default_model']
                 response = client.chat(model=model, messages=messages)
-                return response['message']['content']
+                usage = None
+                if response.get('prompt_eval_count') is not None or response.get('eval_count') is not None:
+                    usage = {
+                        "prompt_tokens": response.get('prompt_eval_count', 0),
+                        "completion_tokens": response.get('eval_count', 0),
+                    }
+                return response['message']['content'], usage
 
             key = api_key or settings.MISTRAL_API_KEY
             if not key:
-                return "No Mistral API key configured. Add one under Settings to use Mistral."
+                return "No Mistral API key configured. Add one under Settings to use Mistral.", None
             from mistralai.client import MistralClient
             client = MistralClient(api_key=key)
             response = client.chat(model='mistral-large-latest', messages=messages)
-            return response.choices[0].message.content
+            usage = None
+            if response.usage:
+                usage = {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens or 0,
+                }
+            return response.choices[0].message.content, usage
 
         except Exception as e:
             log_error(f"Error generating chat response: {str(e)}")
-            return f"Error: {str(e)}"
+            return f"Error: {str(e)}", None
 
-    def generate_embedding(self, text: str, provider_id: str = "mistral", api_key: Optional[str] = None) -> List[float]:
+    def generate_embedding(self, text: str, provider_id: str = "mistral", api_key: Optional[str] = None) -> tuple[List[float], Optional[Dict[str, int]]]:
+        """Returns (embedding_vector, usage) where usage is {"prompt_tokens"} taken from the
+        provider's own accounting, or None if unavailable (callers should estimate instead)."""
         try:
             if provider_id.startswith('ollama'):
                 client = self._ollama_client()
                 if not client:
                     log_error("Ollama is not running or not reachable")
-                    return []
+                    return [], None
                 embedding_model = self.providers['ollama']['embedding_model']
                 response = client.embeddings(model=embedding_model, prompt=text)
-                return response['embedding']
+                return response['embedding'], None
 
             key = api_key or settings.MISTRAL_API_KEY
             if not key:
                 log_error("No Mistral API key configured for embeddings")
-                return []
+                return [], None
             from mistralai.client import MistralClient
             client = MistralClient(api_key=key)
             response = client.embeddings(model='mistral-embed', input=text)
-            return response.data[0].embedding
+            usage = {"prompt_tokens": response.usage.prompt_tokens} if response.usage else None
+            return response.data[0].embedding, usage
 
         except Exception as e:
             log_error(f"Error generating embedding: {str(e)}")
-            return []
+            return [], None
 
     def pull_ollama_model(self, model_name: str) -> bool:
         client = self._ollama_client()

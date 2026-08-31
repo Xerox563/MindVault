@@ -20,7 +20,7 @@ def process_file(db: Session, file: File, provider_id: str | None = None, api_ke
         db.commit()
         db.refresh(chunk_record)
         
-        embedding_vector = get_embedding(text, provider_id=provider_id, api_key=api_key)
+        embedding_vector = get_embedding(text, provider_id=provider_id, api_key=api_key, db=db, user_id=file.user_id)
         if embedding_vector:
             embedding_record = Embedding(
                 chunk_id=chunk_record.id,

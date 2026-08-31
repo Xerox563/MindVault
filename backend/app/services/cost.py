@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from app.models.user import CostTracking, BudgetSetting
 from app.utils.logger import log_info, log_error
+from app.services.user_settings import base_provider
 
 # Provider pricing (per 1K tokens)
 # Updated regularly as prices change
@@ -20,19 +21,6 @@ PROVIDER_PRICING = {
         },
         "embedding": {
             "input": Decimal("0.00002"),  # $0.02 per 1M tokens
-        }
-    },
-    "openai": {
-        "gpt-4": {
-            "input": Decimal("0.03"),
-            "output": Decimal("0.06"),
-        },
-        "gpt-3.5": {
-            "input": Decimal("0.0015"),
-            "output": Decimal("0.002"),
-        },
-        "embedding": {
-            "input": Decimal("0.0001"),
         }
     },
     "ollama": {
@@ -47,9 +35,14 @@ PROVIDER_PRICING = {
 }
 
 def calculate_cost(provider: str, operation: str, input_tokens: int, output_tokens: int = 0) -> Decimal:
-    """Calculate cost based on provider and token usage"""
+    """Calculate cost based on provider and token usage.
+
+    `provider` may be a specific model id (e.g. "ollama-llama3:8b"); it's
+    collapsed to its base provider ("ollama") before the pricing lookup so
+    per-model ids don't miss the table and fall through to paid defaults.
+    """
     try:
-        pricing = PROVIDER_PRICING.get(provider.lower(), {})
+        pricing = PROVIDER_PRICING.get(base_provider(provider.lower()), {})
         
         if operation == "embedding":
             # Embeddings only have input tokens
