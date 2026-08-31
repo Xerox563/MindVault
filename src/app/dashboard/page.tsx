@@ -15,6 +15,7 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/components/ThemeProvider";
 import { GradientText } from "@/components/animations";
+import DocumentViewer from "@/components/DocumentViewer";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -92,6 +93,7 @@ export default function Dashboard() {
   const [savingProvider, setSavingProvider] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [viewerFile, setViewerFile] = useState<{ fileName: string; content: string; loading: boolean; highlight?: string } | null>(null);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -416,6 +418,29 @@ export default function Dashboard() {
     return { Icon, color: SOURCE_COLORS[s] || "text-gray-400" };
   };
 
+  const openSourceViewer = async (source: Source) => {
+    const fileName = source.file_name || source.filename || "Document";
+    if (!source.file_id) {
+      setViewerFile({ fileName, content: "", loading: false, highlight: source.content });
+      return;
+    }
+    setViewerFile({ fileName, content: "", loading: true, highlight: source.content });
+    const token = await getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/files/${source.file_id}/content`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setViewerFile({ fileName: data.filename || fileName, content: data.content || "", loading: false, highlight: source.content });
+      } else {
+        setViewerFile({ fileName, content: "", loading: false, highlight: source.content });
+      }
+    } catch (error) {
+      console.error("Failed to load file content:", error);
+      setViewerFile({ fileName, content: "", loading: false, highlight: source.content });
+    }
+  };
+
   if (!isLoaded) return (
     <div className={`min-h-screen ${theme === "dark" ? "bg-[#111111]" : "bg-slate-100"} flex items-center justify-center`}>
       <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
@@ -651,11 +676,11 @@ export default function Dashboard() {
                               {message.sources.map((source, i) => {
                                 const { Icon, color } = getSourceIcon(source.source_type || source.source);
                                 return (
-                                  <motion.div key={i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.3 }} whileHover={{ y: -2 }} title={source.content} className={`flex items-center gap-2 px-3 py-2 ${cardBg} ${borderColor} border rounded-lg hover:border-purple-500/40 cursor-default transition-colors`}>
+                                  <motion.button key={i} onClick={() => openSourceViewer(source)} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.3 }} whileHover={{ y: -2 }} title={source.content} className={`flex items-center gap-2 px-3 py-2 ${cardBg} ${borderColor} border rounded-lg hover:border-purple-500/40 cursor-pointer transition-colors`}>
                                     <FileText className="w-4 h-4 text-gray-500 shrink-0" />
                                     <span className="text-sm text-gray-300 max-w-[160px] truncate">{source.file_name || source.filename}</span>
                                     <Icon className={`w-3 h-3 shrink-0 ${color}`} />
-                                  </motion.div>
+                                  </motion.button>
                                 );
                               })}
                             </div>
@@ -819,6 +844,16 @@ export default function Dashboard() {
       <AnimatePresence>{showModelSelector && providers.length > 0 && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModelSelector(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="fixed right-4 bottom-24 w-[400px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Choose a model</h3><button onClick={() => setShowModelSelector(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 max-h-[400px] overflow-y-auto">{providers.filter(p => p.type === "cloud").length > 0 && (<><p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Cloud models</p><div className="space-y-1 mb-6">{providers.filter(p => p.type === "cloud").map((provider) => (<button key={provider.id} onClick={() => { setLLMProvider(provider.id); setShowModelSelector(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${selectedProvider?.id === provider.id ? "bg-white/10" : "hover:bg-white/5"}`}><div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Cpu className="w-4 h-4" /></div><div className="flex-1 text-left"><span className="font-medium">{provider.name}</span><p className="text-xs text-gray-500">{provider.model}</p></div>{selectedProvider?.id === provider.id && <Check className="w-4 h-4 text-purple-400" />}</button>))}</div></>)}{providers.filter(p => p.type === "local").length > 0 && (<><p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Local models</p><div className="space-y-1">{providers.filter(p => p.type === "local").map((provider) => (<button key={provider.id} onClick={() => { setLLMProvider(provider.id); setShowModelSelector(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${selectedProvider?.id === provider.id ? "bg-white/10" : "hover:bg-white/5"}`}><div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><HardDrive className="w-4 h-4" /></div><div className="flex-1 text-left"><span className="font-medium">{provider.name}</span><p className="text-xs text-gray-500">{provider.model}</p></div><span className="text-xs text-gray-500 bg-white/10 px-2 py-1 rounded">Local</span>{selectedProvider?.id === provider.id && <Check className="w-4 h-4 text-purple-400" />}</button>))}</div></>)}</div></motion.div></>)}</AnimatePresence>
 
       <AnimatePresence>{showSettings && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSettings(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[440px] h-fit bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Model API Keys</h3><button onClick={() => setShowSettings(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"><p className="text-xs text-gray-500">Add your own API key to unlock a model in the selector below. Local Ollama models need no key.</p>{apiKeys.map((key) => (<div key={key.provider} className="border border-white/10 rounded-xl p-3"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><Key className="w-4 h-4 text-gray-400" /><span className="text-sm font-medium">{PROVIDER_LABELS[key.provider] || key.provider}</span></div>{key.configured && <span className="text-xs text-green-400">{key.source === "user" ? "Your key saved" : "Set by server"}</span>}</div><div className="flex items-center gap-2"><input type="password" placeholder={key.configured ? "Replace key..." : "Enter API key..."} value={apiKeyInputs[key.provider] || ""} onChange={(e) => setApiKeyInputs((prev) => ({ ...prev, [key.provider]: e.target.value }))} className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" /><button onClick={() => saveApiKey(key.provider)} disabled={savingProvider === key.provider || !apiKeyInputs[key.provider]?.trim()} className="px-3 py-2 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50">{savingProvider === key.provider ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}</button>{key.source === "user" && <button onClick={() => removeApiKey(key.provider)} disabled={savingProvider === key.provider} className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-lg disabled:opacity-50" title="Remove key"><Trash2 className="w-3.5 h-3.5" /></button>}</div></div>))}</div></motion.div></>)}</AnimatePresence>
+
+      {viewerFile && (
+        <DocumentViewer
+          fileName={viewerFile.fileName}
+          content={viewerFile.content}
+          loading={viewerFile.loading}
+          highlight={viewerFile.highlight}
+          onClose={() => setViewerFile(null)}
+        />
+      )}
     </div>
   );
 }

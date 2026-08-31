@@ -29,6 +29,7 @@ def _retrieve(db: Session, question: str, user: User):
                 context += chunk_record.content + "\n\n"
                 sources.append({
                     "chunk_id": chunk_record.id,
+                    "file_id": file.id,
                     "file_name": file.filename,
                     "source_type": file.source_type or file.source or "local",
                     "source": file.source or file.source_type or "local",
