@@ -64,3 +64,39 @@ def get_chat_response(prompt: str, context: str = "", provider_id: Optional[str]
             log_error(f"Failed to track chat cost: {e}")
 
     return response
+
+def get_chat_response_stream(prompt: str, context: str = "", provider_id: Optional[str] = None, api_key: Optional[str] = None, db=None, user_id: int = None):
+    """Same as get_chat_response but yields text as it arrives, then tracks cost once done"""
+    chunks = []
+    final_usage = None
+    for delta, usage in llm_service.generate_chat_response_stream(prompt, context, provider_id=provider_id or settings.LLM_PROVIDER, api_key=api_key):
+        if delta:
+            chunks.append(delta)
+            yield delta
+        if usage:
+            final_usage = usage
+
+    response = "".join(chunks)
+    log_info(f"Streamed chat response for question length {len(prompt)}")
+
+    if db and user_id:
+        try:
+            from app.services.cost import track_cost
+            if final_usage:
+                input_tokens = final_usage.get("prompt_tokens", 0)
+                output_tokens = final_usage.get("completion_tokens", 0)
+            else:
+                input_tokens = estimate_tokens(context) + estimate_tokens(prompt)
+                output_tokens = estimate_tokens(response)
+            track_cost(
+                db=db,
+                user_id=user_id,
+                provider=provider_id or settings.LLM_PROVIDER,
+                operation="chat",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens
+            )
+        except Exception as e:
+            log_error(f"Failed to track chat cost: {e}")
+
+    return response

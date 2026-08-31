@@ -1,10 +1,12 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.user import User, ChatHistory, Citation, File, Chunk
+from app.models.user import User, ChatHistory, Citation, Chunk
 from app.schemas.chat import AskRequest, AskResponse
 from app.utils.deps import get_current_user
-from app.services.rag import rag_query
+from app.services.rag import rag_query, rag_query_stream
 from app.services.llm_service import llm_service
 from app.services.user_settings import get_user_api_keys
 from app.services.cache import get_cached_result, cache_result, get_cache_stats, clear_expired_cache
@@ -12,6 +14,24 @@ from app.config import settings
 from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+def _save_chat(db: Session, user: User, question: str, answer: str, sources: list):
+    # store the Q&A pair and its citations so chat history and sources work later
+    chat = ChatHistory(user_id=user.id, question=question, answer=answer)
+    db.add(chat)
+    db.commit()
+    db.refresh(chat)
+
+    for source in sources:
+        chunk = db.query(Chunk).filter(Chunk.id == source["chunk_id"]).first()
+        if chunk:
+            db.add(Citation(
+                chat_id=chat.id,
+                chunk_id=chunk.id,
+                file_id=chunk.file_id,
+                source_type=source.get("source_type") or source.get("source") or "local"
+            ))
+    db.commit()
 
 @router.post("/ask", response_model=AskResponse)
 @limiter.limit("30/minute")  # Rate limit: 30 chat requests per minute
@@ -43,35 +63,50 @@ def ask_question(request: Request, request_data: AskRequest, db: Session = Depen
         # Cache the result for future use
         cache_result(db, request_data.question, result["answer"], result["sources"])
 
-    # Save to chat history
-    chat = ChatHistory(
-        user_id=current_user.id,
-        question=request_data.question,
-        answer=result["answer"]
-    )
-    db.add(chat)
-    db.commit()
-    db.refresh(chat)
-
-    # Save citations
-    for source in result["sources"]:
-        chunk = db.query(Chunk).filter(Chunk.id == source["chunk_id"]).first()
-        if chunk:
-            citation = Citation(
-                chat_id=chat.id,
-                chunk_id=chunk.id,
-                file_id=chunk.file_id,
-                source_type=source.get("source_type") or source.get("source") or "local"
-            )
-            db.add(citation)
-    db.commit()
+    _save_chat(db, current_user, request_data.question, result["answer"], result["sources"])
 
     return AskResponse(
-        answer=result["answer"], 
+        answer=result["answer"],
         sources=result["sources"],
         from_cache=result.get("from_cache", False),
         cache_hits=result.get("cache_hits", 0)
     )
+
+@router.post("/ask/stream")
+@limiter.limit("30/minute")
+def ask_question_stream(request: Request, request_data: AskRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Same as /ask but streams the answer as server-sent events instead of waiting for the full response"""
+    cached_result = get_cached_result(db, request_data.question)
+
+    def sse(event: dict) -> str:
+        return f"data: {json.dumps(event)}\n\n"
+
+    def event_stream():
+        if cached_result:
+            yield sse({"type": "sources", "sources": cached_result["sources"]})
+            yield sse({"type": "chunk", "text": cached_result["answer"]})
+            yield sse({"type": "done", "from_cache": True, "cache_hits": cached_result["hit_count"]})
+            return
+
+        sources = []
+        answer = ""
+        for event in rag_query_stream(db, request_data.question, current_user):
+            if event["type"] == "sources":
+                sources = event["sources"]
+                yield sse(event)
+            elif event["type"] == "chunk":
+                yield sse(event)
+            elif event["type"] == "error":
+                yield sse(event)
+                return
+            elif event["type"] == "done":
+                answer = event["answer"]
+
+        cache_result(db, request_data.question, answer, sources)
+        _save_chat(db, current_user, request_data.question, answer, sources)
+        yield sse({"type": "done", "from_cache": False, "cache_hits": 0})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @router.get("/chat/history")
 def get_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

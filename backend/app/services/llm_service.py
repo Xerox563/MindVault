@@ -136,6 +136,57 @@ class LLMService:
             log_error(f"Error generating chat response: {str(e)}")
             return f"Error: {str(e)}", None
 
+    def generate_chat_response_stream(self, prompt: str, context: str = "", provider_id: str = "mistral", api_key: Optional[str] = None):
+        """Yields (delta_text, usage) as the answer streams in; usage is only set on the last chunk."""
+        try:
+            if context.strip():
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant. Answer the user's question using the provided context from their documents. If the context doesn't contain the answer, say so rather than making one up."},
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {prompt}"}
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": "You are a helpful, friendly assistant for MindVault, a document knowledge base. Chat naturally. If the user asks about their documents and none were found relevant, let them know you couldn't find anything in their uploaded files."},
+                    {"role": "user", "content": prompt}
+                ]
+
+            if provider_id.startswith('ollama'):
+                client = self._ollama_client()
+                if not client:
+                    yield "Ollama is not running or not reachable. Start it and try again.", None
+                    return
+                model = provider_id[len('ollama-'):] if provider_id.startswith('ollama-') and provider_id != 'ollama' else self.providers['ollama']['default_model']
+                for part in client.chat(model=model, messages=messages, stream=True):
+                    content = (part.get('message') or {}).get('content')
+                    if content:
+                        yield content, None
+                    if part.get('done'):
+                        yield "", {
+                            "prompt_tokens": part.get('prompt_eval_count') or 0,
+                            "completion_tokens": part.get('eval_count') or 0,
+                        }
+                return
+
+            key = api_key or settings.MISTRAL_API_KEY
+            if not key:
+                yield "No Mistral API key configured. Add one under Settings to use Mistral.", None
+                return
+            from mistralai.client import MistralClient
+            client = MistralClient(api_key=key)
+            for chunk in client.chat_stream(model='mistral-large-latest', messages=messages):
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    yield delta, None
+                if chunk.usage:
+                    yield "", {
+                        "prompt_tokens": chunk.usage.prompt_tokens,
+                        "completion_tokens": chunk.usage.completion_tokens or 0,
+                    }
+
+        except Exception as e:
+            log_error(f"Error streaming chat response: {str(e)}")
+            yield f"Error: {str(e)}", None
+
     def generate_embedding(self, text: str, provider_id: str = "mistral", api_key: Optional[str] = None) -> tuple[List[float], Optional[Dict[str, int]]]:
         """Returns (embedding_vector, usage) where usage is {"prompt_tokens"} taken from the
         provider's own accounting, or None if unavailable (callers should estimate instead)."""

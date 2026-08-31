@@ -3,21 +3,23 @@
 import { useAuth, useUser, SignOutButton } from "@clerk/nextjs";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { 
-  Upload, FileText, X, Cloud, Brain, Menu, ChevronRight, Search, User, Plus,
-  MoreHorizontal, Mic, ChevronDown, Check, Cpu, HardDrive, FileSpreadsheet,
+import {
+  Upload, FileText, X, Cloud, Brain, Menu, ChevronRight, Search, Plus,
+  MoreHorizontal, ChevronDown, Check, Cpu, HardDrive, FileSpreadsheet,
   FileIcon, ScrollText, ChevronUp, Loader2, AlertCircle, Zap, Settings, Key,
-  Trash2, RefreshCw, Link2, Sparkles, DollarSign, Sun, Moon, Table, Hash, FileJson
+  Trash2, RefreshCw, Link2, Sparkles, DollarSign, Table, Hash, FileJson,
+  Copy, CopyCheck, ArrowDown, SquarePen, SendHorizontal, Quote
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/components/ThemeProvider";
+import { GradientText } from "@/components/animations";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface FileItem { id: number; filename: string; file_type: string; file_size: number; uploaded_at?: string; source_type?: string; source?: string; }
-interface Message { id: string; role: "user" | "assistant"; content: string; sources?: Source[]; timestamp?: string; fromCache?: boolean; cacheHits?: number; }
+interface Message { id: string; role: "user" | "assistant"; content: string; streaming?: boolean; sources?: Source[]; timestamp?: string; fromCache?: boolean; cacheHits?: number; }
 interface Source { filename?: string; file_name?: string; page?: string; file_id?: number; chunk_id?: number; content?: string; source_type?: string; source?: string; }
 interface LLMProvider { id: string; name: string; type: "cloud" | "local"; model: string; available: boolean; }
 interface Integration { id: string; name: string; description: string; icon: string; connected: boolean; }
@@ -88,6 +90,58 @@ export default function Dashboard() {
   const [apiKeys, setApiKeys] = useState<ApiKeyStatus[]>([]);
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
   const [savingProvider, setSavingProvider] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const activeStream = useRef<AbortController | null>(null);
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+    if (nearBottom) scrollToBottom();
+  }, [messages]);
+
+  const handleScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    setShowScrollButton(distanceFromBottom > 240);
+  };
+
+  useEffect(() => () => activeStream.current?.abort(), []);
+
+  const copyMessage = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((c) => (c === id ? null : c)), 1500);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const startNewChat = () => {
+    activeStream.current?.abort();
+    setMessages([]);
+    setInputMessage("");
+  };
+
+  const autoResizeTextarea = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  };
+
+  useEffect(() => {
+    autoResizeTextarea();
+  }, [inputMessage]);
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
@@ -288,19 +342,72 @@ export default function Dashboard() {
     setInputMessage("");
     setIsLoading(true);
 
+    const assistantId = (Date.now() + 1).toString();
+    let sources: Source[] = [];
+    let started = false;
+    const controller = new AbortController();
+    activeStream.current = controller;
+
+    const addAssistantMessage = (text: string) => {
+      setIsLoading(false);
+      setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: text, timestamp: getCurrentTime() }]);
+    };
+
     try {
       const token = await getAuthToken();
-      const res = await fetch(`${API_URL}/api/ask`, {
+      const res = await fetch(`${API_URL}/api/ask/stream`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ question: userMessage.content }),
+        signal: controller.signal,
       });
-      if (res.ok) {
-        const data = await res.json();
-        const assistantMessage: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: data.answer, sources: data.sources, timestamp: getCurrentTime(), fromCache: data.from_cache, cacheHits: data.cache_hits };
-        setMessages((prev) => [...prev, assistantMessage]);
-      } else { const error = await res.json(); setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `Error: ${error.detail || "Failed to get response"}`, timestamp: getCurrentTime() }]); }
-    } catch (error) { console.error("Chat failed:", error); setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: "Sorry, I couldn't process your request. Please try again.", timestamp: getCurrentTime() }]); }
-    finally { setIsLoading(false); }
+
+      if (!res.ok || !res.body) {
+        const error = await res.json().catch(() => ({}));
+        addAssistantMessage(`Error: ${error.detail || "Failed to get response"}`);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const raw of events) {
+          const line = raw.trim();
+          if (!line.startsWith("data:")) continue;
+          const event = JSON.parse(line.slice(5).trim());
+
+          if (event.type === "sources") {
+            sources = event.sources;
+          } else if (event.type === "chunk") {
+            if (!started) {
+              started = true;
+              setIsLoading(false);
+              setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: event.text, streaming: true, timestamp: getCurrentTime() }]);
+            } else {
+              setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: m.content + event.text } : m));
+            }
+          } else if (event.type === "error") {
+            addAssistantMessage(`Error: ${event.message}`);
+          } else if (event.type === "done") {
+            setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, streaming: false, sources, fromCache: event.from_cache, cacheHits: event.cache_hits } : m));
+          }
+        }
+      }
+    } catch (error) {
+      if ((error as Error).name === "AbortError") return;
+      console.error("Chat failed:", error);
+      addAssistantMessage("Sorry, I couldn't process your request. Please try again.");
+    } finally {
+      setIsLoading(false);
+      activeStream.current = null;
+    }
   };
 
   const getSourceIcon = (sourceType?: string) => {
@@ -396,9 +503,28 @@ export default function Dashboard() {
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className={`h-14 ${borderColor} border-b flex items-center justify-between px-4 ${cardBg}/80 backdrop-blur-md`}>
-          <motion.button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Menu className="w-5 h-5" />
-          </motion.button>
+          <div className="flex items-center gap-1">
+            <motion.button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Menu className="w-5 h-5" />
+            </motion.button>
+            <AnimatePresence>
+              {messages.length > 0 && (
+                <motion.button
+                  onClick={startNewChat}
+                  initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                  animate={{ opacity: 1, width: "auto", marginLeft: 4 }}
+                  exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors overflow-hidden whitespace-nowrap"
+                  title="Start a new chat"
+                >
+                  <SquarePen className="w-4 h-4 shrink-0" />
+                  <span>New chat</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -409,53 +535,126 @@ export default function Dashboard() {
         </header>
 
         <main className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Ambient depth glow behind the chat surface */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden -z-0">
+            <motion.div
+              className="absolute top-[-10%] left-1/3 w-[420px] h-[420px] rounded-full opacity-[0.08]"
+              style={{ background: "radial-gradient(circle, #8b5cf6 0%, transparent 70%)", filter: "blur(90px)" }}
+              animate={{ x: [0, 40, 0], y: [0, 20, 0] }}
+              transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.div
+              className="absolute bottom-[-10%] right-1/4 w-[380px] h-[380px] rounded-full opacity-[0.08]"
+              style={{ background: "radial-gradient(circle, #06b6d4 0%, transparent 70%)", filter: "blur(90px)" }}
+              animate={{ x: [0, -30, 0], y: [0, -20, 0] }}
+              transition={{ duration: 16, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            />
+          </div>
+
           {messages.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center px-4">
+            <div className="flex-1 flex flex-col items-center justify-center px-4 relative z-10">
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-2xl">
-                <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 2, repeat: Infinity }} className="flex items-center justify-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/20"><Brain className="w-7 h-7 text-white" /></div>
-                  <h1 className="text-4xl font-light text-white">Welcome to MindVault</h1>
+                <motion.div
+                  initial={{ scale: 0.6, opacity: 0, rotate: -8 }}
+                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 14 }}
+                  className="flex items-center justify-center gap-3 mb-6"
+                >
+                  <motion.div
+                    animate={{ boxShadow: ["0 0 20px rgba(249,115,22,0.15)", "0 0 40px rgba(249,115,22,0.35)", "0 0 20px rgba(249,115,22,0.15)"] }}
+                    transition={{ duration: 2.5, repeat: Infinity }}
+                    className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center"
+                  >
+                    <Brain className="w-7 h-7 text-white" />
+                  </motion.div>
+                  <h1 className="text-4xl font-light">
+                    Welcome to <GradientText>MindVault</GradientText>
+                  </h1>
                 </motion.div>
                 <p className="text-xl text-gray-400 mb-8">How can I help you today?</p>
                 <div className="grid grid-cols-2 gap-3 max-w-lg mx-auto">
-                  {files.length > 0 ? (["Summarize my documents", "What are the key points?", "Find information about...", "Compare these documents"].map((prompt) => (
-                    <motion.button key={prompt} onClick={() => setInputMessage(prompt)} className="p-4 text-left bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-purple-500/30 transition-all" whileHover={{ y: -2 }}><p className="text-sm text-gray-300">{prompt}</p></motion.button>
+                  {files.length > 0 ? ([
+                    { label: "Summarize my documents", icon: FileText },
+                    { label: "What are the key points?", icon: Sparkles },
+                    { label: "Find information about...", icon: Search },
+                    { label: "Compare these documents", icon: Table },
+                  ].map((prompt, i) => (
+                    <motion.button
+                      key={prompt.label}
+                      onClick={() => setInputMessage(prompt.label)}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15 + i * 0.06, duration: 0.35 }}
+                      whileHover={{ y: -3, borderColor: "rgba(168,85,247,0.5)" }}
+                      whileTap={{ scale: 0.98 }}
+                      className="group p-4 text-left bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
+                    >
+                      <prompt.icon className="w-4 h-4 text-purple-400 mb-2 group-hover:scale-110 transition-transform" />
+                      <p className="text-sm text-gray-300">{prompt.label}</p>
+                    </motion.button>
                   ))) : (<div className="col-span-2 p-4 text-center text-gray-500">Upload files to start chatting with your documents</div>)}
                 </div>
               </motion.div>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto px-4 py-6">
+            <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-6 relative z-10">
               {messages.map((message) => (
-                <div key={message.id} className="mb-6">
+                <div key={message.id} className="mb-6 group/msg">
                   {message.role === "user" ? (
-                    <div className="flex justify-end mb-2">
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+                      className="flex justify-end mb-2"
+                    >
                       <div className="max-w-[85%] md:max-w-[70%]">
-                        <div className={`${userMsgBg} rounded-2xl rounded-tr-sm px-5 py-3 text-[15px]`}>{message.content}</div>
+                        <div className={`${userMsgBg} rounded-2xl rounded-tr-sm px-5 py-3 text-[15px] whitespace-pre-wrap shadow-lg shadow-black/10`}>{message.content}</div>
                         <div className="flex items-center justify-end gap-1.5 mt-1.5"><span className="text-xs text-gray-500">{message.timestamp}</span><Check className="w-3.5 h-3.5 text-gray-500" /></div>
                       </div>
-                    </div>
+                    </motion.div>
                   ) : (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex gap-3 max-w-[90%]">
-                      <div className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20"><Sparkles className="w-4 h-4 text-white" /></div>
-                      <div className="flex-1">
-                        <div className={`${cardBg} rounded-2xl rounded-tl-sm px-5 py-4 ${borderColor}`}>
+                      <motion.div
+                        animate={message.streaming ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+                        transition={{ duration: 1.1, repeat: message.streaming ? Infinity : 0 }}
+                        className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20"
+                      >
+                        <Sparkles className="w-4 h-4 text-white" />
+                      </motion.div>
+                      <div className="flex-1 min-w-0">
+                        <div className={`${cardBg} rounded-2xl rounded-tl-sm px-5 py-4 ${borderColor} border`}>
                           <div className="text-[15px] leading-relaxed text-gray-200">
-                            <ReactMarkdown components={{ p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>, h1: ({ children }) => <h1 className="text-lg font-semibold mt-3 mb-2 first:mt-0">{children}</h1>, h2: ({ children }) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0">{children}</h2>, h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1 first:mt-0">{children}</h3>, strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>, ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>, ol: ({ children }) => <ol className="list-disc pl-5 mb-3 space-y-1.5">{children}</ol>, li: ({ children }) => <li className="text-gray-300">{children}</li>, code: ({ children }) => <code className="bg-white/10 px-1.5 py-0.5 rounded text-sm font-mono text-gray-300">{children}</code>, pre: ({ children }) => <pre className="bg-white/5 border border-white/10 rounded-lg p-3 overflow-x-auto mb-3 text-sm">{children}</pre>, a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">{children}</a> }}>{message.content}</ReactMarkdown>
+                            {message.streaming ? (
+                              <p className="whitespace-pre-wrap mb-0">{message.content}<span className="stream-cursor text-purple-400" /></p>
+                            ) : (
+                              <ReactMarkdown components={{ p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>, h1: ({ children }) => <h1 className="text-lg font-semibold mt-3 mb-2 first:mt-0">{children}</h1>, h2: ({ children }) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0">{children}</h2>, h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1 first:mt-0">{children}</h3>, strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>, ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>, ol: ({ children }) => <ol className="list-disc pl-5 mb-3 space-y-1.5">{children}</ol>, li: ({ children }) => <li className="text-gray-300">{children}</li>, code: ({ children }) => <code className="bg-white/10 px-1.5 py-0.5 rounded text-sm font-mono text-gray-300">{children}</code>, pre: ({ children }) => <pre className="bg-white/5 border border-white/10 rounded-lg p-3 overflow-x-auto mb-3 text-sm">{children}</pre>, a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">{children}</a> }}>{message.content}</ReactMarkdown>
+                            )}
                           </div>
                         </div>
-                        <div className="mt-1.5 flex items-center gap-2"><span className="text-xs text-gray-500">{message.timestamp}</span>{message.fromCache && (<span className="text-[10px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded flex items-center gap-1"><Zap className="w-3 h-3" />Cached{message.cacheHits && message.cacheHits > 1 && <span className="text-green-500">({message.cacheHits} hits)</span>}</span>)}</div>
-                        {message.sources && message.sources.length > 0 && (
+                        <div className="mt-1.5 flex items-center gap-3">
+                          <span className="text-xs text-gray-500">{message.timestamp}</span>
+                          {message.fromCache && (<span className="text-[10px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded flex items-center gap-1"><Zap className="w-3 h-3" />Cached{message.cacheHits && message.cacheHits > 1 && <span className="text-green-500">({message.cacheHits} hits)</span>}</span>)}
+                          {!message.streaming && message.content && (
+                            <button
+                              onClick={() => copyMessage(message.id, message.content)}
+                              className="opacity-0 group-hover/msg:opacity-100 flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-all"
+                              title="Copy response"
+                            >
+                              {copiedId === message.id ? <><CopyCheck className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Copied</span></> : <><Copy className="w-3.5 h-3.5" />Copy</>}
+                            </button>
+                          )}
+                        </div>
+                        {message.sources && message.sources.length > 0 && !message.streaming && (
                           <div className="mt-4">
-                            <p className="text-sm text-gray-400 mb-2">Sources</p>
+                            <p className="text-sm text-gray-400 mb-2 flex items-center gap-1.5"><Quote className="w-3.5 h-3.5" />Sources</p>
                             <div className="flex flex-wrap gap-2">
                               {message.sources.map((source, i) => {
                                 const { Icon, color } = getSourceIcon(source.source_type || source.source);
                                 return (
-                                  <motion.div key={i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1, duration: 0.3 }} className={`flex items-center gap-2 px-3 py-2 ${cardBg} ${borderColor} rounded-lg hover:bg-white/5 cursor-pointer transition-colors`}>
-                                    <FileText className="w-4 h-4 text-gray-500" />
-                                    <span className="text-sm text-gray-300">{source.file_name || source.filename}</span>
-                                    <Icon className={`w-3 h-3 ${color}`} />
+                                  <motion.div key={i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.3 }} whileHover={{ y: -2 }} title={source.content} className={`flex items-center gap-2 px-3 py-2 ${cardBg} ${borderColor} border rounded-lg hover:border-purple-500/40 cursor-default transition-colors`}>
+                                    <FileText className="w-4 h-4 text-gray-500 shrink-0" />
+                                    <span className="text-sm text-gray-300 max-w-[160px] truncate">{source.file_name || source.filename}</span>
+                                    <Icon className={`w-3 h-3 shrink-0 ${color}`} />
                                   </motion.div>
                                 );
                               })}
@@ -467,16 +666,45 @@ export default function Dashboard() {
                   )}
                 </div>
               ))}
-              <AnimatePresence>{isLoading && (<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="flex gap-3 mb-6"><div className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center"><Sparkles className="w-4 h-4 text-white" /></div><div className={`${cardBg} rounded-2xl rounded-tl-sm px-5 py-4 ${borderColor} min-w-[200px]`}><div className="flex items-center gap-1.5"><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0 }} /><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.2 }} /><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }} /></div></div></motion.div>)}</AnimatePresence>
+              <AnimatePresence>{isLoading && (<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="flex gap-3 mb-6"><div className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center"><Sparkles className="w-4 h-4 text-white" /></div><div className={`${cardBg} rounded-2xl rounded-tl-sm px-5 py-4 ${borderColor} border min-w-[200px]`}><div className="flex items-center gap-1.5"><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0 }} /><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.2 }} /><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }} /></div></div></motion.div>)}</AnimatePresence>
+              <div ref={messagesEndRef} />
             </div>
           )}
 
-          <div className="p-4">
+          <AnimatePresence>
+            {showScrollButton && messages.length > 0 && (
+              <motion.button
+                initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => scrollToBottom()}
+                className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-9 h-9 rounded-full ${cardBg} ${borderColor} border shadow-lg flex items-center justify-center text-gray-300 hover:text-white`}
+                title="Scroll to latest"
+              >
+                <ArrowDown className="w-4 h-4" />
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          <div className="p-4 relative z-10">
             <div className="max-w-3xl mx-auto">
-              <div className={`${inputBg} ${borderColor} border rounded-2xl`}>
-                <div className="flex items-center gap-2 p-2">
+              <div className="relative rounded-2xl">
+                <AnimatePresence>
+                  {inputMessage.trim().length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 0.6 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute -inset-[1.5px] rounded-2xl input-glow-border pointer-events-none"
+                    />
+                  )}
+                </AnimatePresence>
+                <div className={`relative ${inputBg} ${borderColor} border rounded-2xl transition-colors`}>
+                <div className="flex items-end gap-2 p-2">
                   <div className="relative">
-                    <motion.button onClick={openIntegrations} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-8 h-8 flex items-center justify-center border border-white/20 rounded-xl hover:bg-white/10 text-gray-400" title="Integrations"><Plus className="w-4 h-4" /></motion.button>
+                    <motion.button onClick={openIntegrations} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-8 h-8 flex items-center justify-center border border-white/20 rounded-xl hover:bg-white/10 text-gray-400 shrink-0 mb-1" title="Integrations"><Plus className="w-4 h-4" /></motion.button>
                     <AnimatePresence>{showIntegrations && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowIntegrations(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="absolute left-0 bottom-full mb-2 w-[420px] max-h-[500px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Integrations</h3><button onClick={() => setShowIntegrations(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 max-h-[420px] overflow-y-auto space-y-4">{integrations.map((integration) => {
                       const IntIcon = INTEGRATION_ICONS[integration.id] || Cloud;
                       const intColor = INTEGRATION_COLORS[integration.id] || "text-blue-400";
@@ -543,11 +771,46 @@ export default function Dashboard() {
                     );
                   })}</div></motion.div></>)}</AnimatePresence>
                   </div>
-                  <input type="text" value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSendMessage()} placeholder={files.length > 0 ? "Ask about your documents..." : "Upload files to start chatting"} disabled={files.length === 0} className="flex-1 bg-transparent px-3 py-3 text-white placeholder-gray-500 focus:outline-none disabled:opacity-50" />
-                  <button className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white"><Mic className="w-4 h-4" /></button>
-                  {modelsLoading ? <Loader2 className="w-5 h-5 animate-spin text-gray-500" /> : providers.length > 0 ? (<motion.button onClick={() => setShowModelSelector(true)} whileHover={{ scale: 1.02 }} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white border border-white/10 rounded-xl">{selectedProvider?.name || "Select Model"}<ChevronDown className="w-3 h-3" /></motion.button>) : (<div className="flex items-center gap-1 text-xs text-orange-400"><AlertCircle className="w-4 h-4" />No models</div>)}
+                  <textarea
+                    ref={textareaRef}
+                    rows={1}
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    placeholder={files.length > 0 ? "Ask about your documents... (Enter to send, Shift+Enter for a new line)" : "Upload files to start chatting"}
+                    disabled={files.length === 0}
+                    className="flex-1 bg-transparent px-3 py-3 text-white placeholder-gray-500 focus:outline-none disabled:opacity-50 resize-none max-h-[200px] hide-scrollbar leading-relaxed"
+                  />
+                  <div className="flex items-center gap-2 mb-1 shrink-0">
+                    {modelsLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                    ) : providers.length > 0 ? (
+                      <motion.button onClick={() => setShowModelSelector(true)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white border border-white/10 rounded-xl">
+                        <span className="hidden sm:inline">{selectedProvider?.name || "Select Model"}</span><ChevronDown className="w-3 h-3" />
+                      </motion.button>
+                    ) : (
+                      <div className="flex items-center gap-1 text-xs text-orange-400"><AlertCircle className="w-4 h-4" />No models</div>
+                    )}
+                    <motion.button
+                      onClick={handleSendMessage}
+                      disabled={!inputMessage.trim() || isLoading || files.length === 0}
+                      whileHover={inputMessage.trim() ? { scale: 1.06 } : {}}
+                      whileTap={inputMessage.trim() ? { scale: 0.94 } : {}}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${inputMessage.trim() && !isLoading ? "bg-gradient-to-br from-purple-500 to-purple-700 text-white shadow-lg shadow-purple-500/30" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
+                      title="Send message"
+                    >
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
+                    </motion.button>
+                  </div>
+                </div>
                 </div>
               </div>
+              <p className="text-[11px] text-gray-600 text-center mt-2">MindVault can make mistakes. Verify important answers against your source documents.</p>
             </div>
           </div>
         </main>
