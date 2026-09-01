@@ -5,11 +5,19 @@ from rank_bm25 import BM25Okapi
 from app.models.user import File, Chunk
 from app.services.vectordb import search_similar
 
-VECTOR_CANDIDATES = 15
-BM25_CANDIDATES = 15
-FINAL_TOP_K = 5
+VECTOR_CANDIDATES = 20
+BM25_CANDIDATES = 20
+FINAL_TOP_K = 6
+BROAD_FINAL_TOP_K = 14
 RRF_K = 60
 RELEVANCE_DISTANCE_THRESHOLD = 0.62
+
+# queries like "list my experience" or "summarize this" want broad recall, not one exact snippet
+_BROAD_INTENT_TERMS = {
+    "all", "every", "everything", "each", "list", "summarize", "summary",
+    "overview", "experience", "experiences", "history", "timeline", "compare",
+    "skills", "education", "projects", "details",
+}
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
@@ -75,4 +83,6 @@ def hybrid_search(db: Session, question: str, query_embedding: list[float], user
         fused.append((chunk_id, score))
 
     fused.sort(key=lambda pair: pair[1], reverse=True)
-    return [chunk_id for chunk_id, _ in fused[:FINAL_TOP_K]]
+    query_tokens_for_intent = _tokenize(question)
+    top_k = BROAD_FINAL_TOP_K if set(query_tokens_for_intent) & _BROAD_INTENT_TERMS else FINAL_TOP_K
+    return [chunk_id for chunk_id, _ in fused[:top_k]]

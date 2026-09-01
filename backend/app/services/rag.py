@@ -23,24 +23,44 @@ def _retrieve(db: Session, question: str, user: User):
 
     chunk_ids = hybrid_search(db, question, query_embedding, user.id, workspace_id)
 
-    context = ""
-    sources = []
+    hits = []
+    files_by_id = {}
     for chunk_id in chunk_ids:
         chunk_record = db.query(Chunk).filter(Chunk.id == int(chunk_id)).first()
-        if chunk_record:
+        if not chunk_record:
+            continue
+        file = files_by_id.get(chunk_record.file_id)
+        if file is None:
             file_query = db.query(File).filter(File.id == chunk_record.file_id)
             file_query = file_query.filter(File.workspace_id == workspace_id) if workspace_id else file_query.filter(File.user_id == user.id, File.workspace_id.is_(None))
             file = file_query.first()
             if file:
-                context += chunk_record.content + "\n\n"
-                sources.append({
-                    "chunk_id": chunk_record.id,
-                    "file_id": file.id,
-                    "file_name": file.filename,
-                    "source_type": file.source_type or file.source or "local",
-                    "source": file.source or file.source_type or "local",
-                    "content": chunk_record.content[:200]
-                })
+                files_by_id[chunk_record.file_id] = file
+        if file:
+            hits.append(chunk_record)
+
+    # a matched fragment is often mid-sentence (e.g. one job entry cut off) - pull its
+    # immediate neighbors in the same file so the model sees the whole entry, not a sliver
+    context_chunks = {c.id: c for c in hits}
+    for chunk_record in hits:
+        for neighbor_index in (chunk_record.chunk_index - 1, chunk_record.chunk_index + 1):
+            if neighbor_index < 0:
+                continue
+            neighbor = db.query(Chunk).filter(Chunk.file_id == chunk_record.file_id, Chunk.chunk_index == neighbor_index).first()
+            if neighbor and neighbor.id not in context_chunks:
+                context_chunks[neighbor.id] = neighbor
+
+    ordered_context = sorted(context_chunks.values(), key=lambda c: (c.file_id, c.chunk_index))
+    context = "\n\n".join(c.content for c in ordered_context)
+
+    sources = [{
+        "chunk_id": chunk_record.id,
+        "file_id": files_by_id[chunk_record.file_id].id,
+        "file_name": files_by_id[chunk_record.file_id].filename,
+        "source_type": files_by_id[chunk_record.file_id].source_type or files_by_id[chunk_record.file_id].source or "local",
+        "source": files_by_id[chunk_record.file_id].source or files_by_id[chunk_record.file_id].source_type or "local",
+        "content": chunk_record.content[:200]
+    } for chunk_record in hits]
 
     return provider_id, api_key, context, sources
 

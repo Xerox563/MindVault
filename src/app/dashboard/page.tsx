@@ -14,7 +14,6 @@ import {
   Users, UserPlus, Crown, Eye, Pencil
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useTheme } from "@/components/ThemeProvider";
 import { GradientText } from "@/components/animations";
 import DocumentViewer from "@/components/DocumentViewer";
 
@@ -40,15 +39,15 @@ const base_provider_client = (providerId: string) => {
   return providerId;
 };
 const SOURCE_ICONS: Record<string, React.ElementType> = { local: FileIcon, drive: Cloud, sheets: Table, slack: Hash, notion: FileJson };
-const SOURCE_COLORS: Record<string, string> = { local: "text-gray-400", drive: "text-blue-400", sheets: "text-green-400", slack: "text-purple-400", notion: "text-yellow-400" };
+const SOURCE_COLORS: Record<string, string> = { local: "text-[var(--candy-ink)]/60", drive: "text-blue-400", sheets: "text-[var(--candy-lime)]", slack: "text-[var(--candy-lavender)]", notion: "text-yellow-400" };
 const INTEGRATION_ICONS: Record<string, React.ElementType> = { google_drive: Cloud, google_sheets: Table, slack: Hash, notion: FileJson };
-const INTEGRATION_COLORS: Record<string, string> = { google_drive: "text-blue-400", google_sheets: "text-green-400", slack: "text-purple-400", notion: "text-yellow-400" };
+const INTEGRATION_COLORS: Record<string, string> = { google_drive: "text-blue-400", google_sheets: "text-[var(--candy-lime)]", slack: "text-[var(--candy-lavender)]", notion: "text-yellow-400" };
 
 const FileTypeIcon = ({ type, className = "" }: { type: string; className?: string }) => {
   if (type?.includes('pdf')) return <FileText className={`${className} text-red-400`} />;
-  if (type?.includes('xlsx') || type?.includes('csv')) return <FileSpreadsheet className={`${className} text-green-400`} />;
+  if (type?.includes('xlsx') || type?.includes('csv')) return <FileSpreadsheet className={`${className} text-[var(--candy-lime)]`} />;
   if (type?.includes('doc') || type?.includes('docx')) return <ScrollText className={`${className} text-blue-400`} />;
-  return <FileIcon className={`${className} text-gray-400`} />;
+  return <FileIcon className={`${className} text-[var(--candy-ink)]/60`} />;
 };
 
 const formatFileSize = (bytes: number) => {
@@ -86,8 +85,7 @@ const getCurrentTime = () => {
 export default function Dashboard() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
-  const { theme } = useTheme();
-  
+
   const [files, setFiles] = useState<FileItem[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -620,7 +618,7 @@ export default function Dashboard() {
   const getSourceIcon = (sourceType?: string) => {
     const s = sourceType || "local";
     const Icon = SOURCE_ICONS[s] || FileIcon;
-    return { Icon, color: SOURCE_COLORS[s] || "text-gray-400" };
+    return { Icon, color: SOURCE_COLORS[s] || "text-[var(--candy-ink)]/60" };
   };
 
   const openSourceViewer = async (source: Source) => {
@@ -672,31 +670,42 @@ export default function Dashboard() {
   };
 
   if (!isLoaded) return (
-    <div className={`min-h-screen ${theme === "dark" ? "bg-[#111111]" : "bg-slate-100"} flex items-center justify-center`}>
-      <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
-        <Loader2 className="w-8 h-8 text-purple-500" />
+    <div className="candy-theme isolate min-h-screen bg-[var(--candy-bg)] flex items-center justify-center">
+      <motion.div
+        className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] flex items-center justify-center sticker-sm"
+        animate={{ rotate: [0, 12, -12, 0] }}
+        transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <Brain className="w-7 h-7 text-white" />
       </motion.div>
     </div>
   );
 
   if (!isSignedIn) return (
-    <div className={`min-h-screen ${theme === "dark" ? "bg-[#111111]" : "bg-slate-100"} flex flex-col items-center justify-center`}>
-      <p className="text-white mb-4">Please sign in to access the dashboard</p>
-      <Link href="/login"><button className="px-6 py-3 bg-purple-600 rounded-lg text-white font-medium hover:bg-purple-700">Sign In</button></Link>
+    <div className="candy-theme isolate min-h-screen bg-[var(--candy-bg)] text-[var(--candy-ink)] flex flex-col items-center justify-center font-grotesk gap-4">
+      <p className="mb-1">Please sign in to access the dashboard</p>
+      <Link href="/login">
+        <motion.button whileHover={{ scale: 1.05, rotate: -1 }} whileTap={{ scale: 0.96 }} className="px-6 py-3 bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] sticker-sm rounded-xl text-white font-medium">
+          Sign In
+        </motion.button>
+      </Link>
     </div>
   );
 
-  const bgColor = theme === "dark" ? "bg-[#111111]" : "bg-slate-100";
-  const cardBg = theme === "dark" ? "bg-[#1a1a1a]" : "bg-white";
-  const borderColor = theme === "dark" ? "border-white/10" : "border-slate-200";
-  const inputBg = theme === "dark" ? "bg-[#1a1a1a]" : "bg-slate-50";
-  const userMsgBg = theme === "dark" ? "bg-[#2d2d2d]" : "bg-purple-600";
-  const textPrimary = theme === "dark" ? "text-white" : "text-slate-900";
-  const textSecondary = theme === "dark" ? "text-gray-400" : "text-slate-600";
-  const glassClass = theme === "dark" ? "glass" : "bg-white/80 backdrop-blur-md shadow-sm";
+  const bgColor = "bg-[var(--candy-bg)]";
+  const cardBg = "bg-[var(--candy-card)]";
+  const borderColor = "border-[var(--candy-ink)]/15";
+  const inputBg = "bg-[var(--candy-card)]";
+  const userMsgBg = "bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] text-white";
+  const textPrimary = "text-[var(--candy-ink)]";
 
   return (
-    <div className={`min-h-screen ${bgColor} ${textPrimary} flex`}>
+    <div className="candy-theme isolate min-h-screen font-grotesk">
+    <div className={`min-h-screen ${bgColor} ${textPrimary} flex relative overflow-hidden`}>
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 candy-mesh opacity-40" />
+        <div className="absolute inset-0 candy-dot-grid" />
+      </div>
       <AnimatePresence mode="wait">
         {sidebarOpen && (
           <motion.aside
@@ -704,44 +713,46 @@ export default function Dashboard() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -280, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className={`w-[280px] ${borderColor} border-r flex flex-col h-screen ${cardBg}`}
+            className={`w-[280px] ${borderColor} border-r flex flex-col h-screen ${cardBg} relative z-10`}
           >
             <div className={`p-4 ${borderColor} border-b`}>
               <Link href="/" className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                <motion.div whileHover={{ rotate: -8, scale: 1.08 }} className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--candy-orange)] to-[var(--candy-pink)] flex items-center justify-center sticker-sm">
                   <Brain className="w-5 h-5 text-white" />
-                </div>
-                <span className="font-semibold text-lg">MindVault</span>
+                </motion.div>
+                <span className="font-marker text-xl">MindVault</span>
               </Link>
 
               <div className="relative">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setShowWorkspaceSwitcher((s) => !s)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg ${inputBg} ${borderColor} border hover:border-purple-500/30 transition-colors text-left`}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl ${inputBg} border ${borderColor} hover:border-[var(--candy-lavender)] transition-colors text-left`}
                 >
-                  <Users className="w-4 h-4 text-purple-400 shrink-0" />
+                  <Users className="w-4 h-4 text-[var(--candy-lavender)] shrink-0" />
                   <span className="flex-1 text-sm truncate">{activeWorkspace ? activeWorkspace.name : "Personal"}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                </button>
+                  <ChevronDown className="w-3.5 h-3.5 opacity-50 shrink-0" />
+                </motion.button>
 
                 <AnimatePresence>
                   {showWorkspaceSwitcher && (
                     <>
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowWorkspaceSwitcher(false)} className="fixed inset-0 z-40" />
-                      <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className={`absolute left-0 top-full mt-2 w-full ${cardBg} border ${borderColor} rounded-xl z-50 overflow-hidden shadow-2xl`}>
-                        <button onClick={() => switchWorkspace(null)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 transition-colors ${!activeWorkspaceId ? "text-purple-400" : "text-gray-300"}`}>
+                      <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} className={`absolute left-0 top-full mt-2 w-full ${cardBg} sticker-sm rounded-xl z-50 overflow-hidden`}>
+                        <button onClick={() => switchWorkspace(null)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-[var(--candy-ink)]/5 transition-colors ${!activeWorkspaceId ? "text-[var(--candy-pink)] font-medium" : ""}`}>
                           <FileIcon className="w-3.5 h-3.5 shrink-0" /><span className="flex-1 text-left">Personal</span>{!activeWorkspaceId && <Check className="w-3.5 h-3.5" />}
                         </button>
                         {workspaces.map((w) => (
-                          <button key={w.id} onClick={() => switchWorkspace(w.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 transition-colors ${activeWorkspaceId === w.id ? "text-purple-400" : "text-gray-300"}`}>
+                          <button key={w.id} onClick={() => switchWorkspace(w.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-[var(--candy-ink)]/5 transition-colors ${activeWorkspaceId === w.id ? "text-[var(--candy-pink)] font-medium" : ""}`}>
                             <Users className="w-3.5 h-3.5 shrink-0" /><span className="flex-1 text-left truncate">{w.name}</span>
-                            <span className="text-[10px] text-gray-500 uppercase">{w.role}</span>
+                            <span className="text-[10px] opacity-50 uppercase">{w.role}</span>
                             {activeWorkspaceId === w.id && <Check className="w-3.5 h-3.5" />}
                           </button>
                         ))}
                         <div className={`border-t ${borderColor} p-2 space-y-1`}>
                           {activeWorkspace && (
-                            <button onClick={openWorkspacePanel} className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                            <button onClick={openWorkspacePanel} className="w-full flex items-center gap-2 px-2 py-1.5 text-xs opacity-70 hover:opacity-100 hover:bg-[var(--candy-ink)]/5 rounded-lg transition-colors">
                               <UserPlus className="w-3.5 h-3.5" />Manage members
                             </button>
                           )}
@@ -752,11 +763,11 @@ export default function Dashboard() {
                               onChange={(e) => setNewWorkspaceName(e.target.value)}
                               onKeyDown={(e) => e.key === "Enter" && createWorkspace()}
                               placeholder="New workspace name"
-                              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                              className="flex-1 bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/15 rounded-lg px-2 py-1.5 text-xs placeholder:opacity-40 focus:outline-none focus:border-[var(--candy-lavender)]"
                             />
-                            <button onClick={createWorkspace} disabled={!newWorkspaceName.trim() || workspaceBusy} className="p-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50">
+                            <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }} onClick={createWorkspace} disabled={!newWorkspaceName.trim() || workspaceBusy} className="p-1.5 bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] text-white rounded-lg disabled:opacity-50">
                               {workspaceBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                            </button>
+                            </motion.button>
                           </div>
                         </div>
                       </motion.div>
@@ -770,25 +781,25 @@ export default function Dashboard() {
               {canManageFiles ? (
                 <label className="block w-full cursor-pointer">
                   <input type="file" onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} className="hidden" accept=".pdf,.docx,.txt,.csv,.xlsx,.md" disabled={uploading} />
-                  <motion.div whileHover={{ scale: uploading ? 1 : 1.02 }} whileTap={{ scale: uploading ? 1 : 0.98 }} className={`w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg flex items-center justify-center gap-2 mb-2 ${uploading ? 'opacity-50' : ''}`}>
+                  <motion.div whileHover={{ scale: uploading ? 1 : 1.03, rotate: uploading ? 0 : -1 }} whileTap={{ scale: uploading ? 1 : 0.97 }} className={`w-full py-3 px-4 bg-gradient-to-r from-[var(--candy-pink)] to-[var(--candy-lavender)] text-white sticker-sm rounded-xl flex items-center justify-center gap-2 mb-2 ${uploading ? 'opacity-50' : ''}`}>
                     {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /><span className="font-medium">Uploading... {uploadProgress}%</span></> : <><Upload className="w-4 h-4" /><span className="font-medium">Upload Files</span></>}
                   </motion.div>
                 </label>
               ) : (
-                <div className="w-full py-3 px-4 bg-white/5 rounded-lg flex items-center justify-center gap-2 mb-2 text-gray-500">
+                <div className={`w-full py-3 px-4 ${inputBg} rounded-xl flex items-center justify-center gap-2 mb-2 opacity-60`}>
                   <Eye className="w-4 h-4" /><span className="text-sm">View-only access</span>
                 </div>
               )}
-              <p className="text-xs text-gray-500 text-center mb-6">PDF, DOCX, TXT, CSV, XLSX, MD</p>
+              <p className="text-xs opacity-50 text-center mb-6">PDF, DOCX, TXT, CSV, XLSX, MD</p>
 
               <div className="relative mb-6">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <input type="text" placeholder="Search files" className={`w-full ${inputBg} ${borderColor} border rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50`} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+                <input type="text" placeholder="Search files" className={`w-full ${inputBg} border ${borderColor} rounded-xl pl-9 pr-3 py-2 text-sm placeholder:opacity-40 focus:outline-none focus:border-[var(--candy-lavender)]`} />
               </div>
 
               <div className="mb-4">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Your Files</h3>
-                <p className="text-xs text-gray-500">{files.length} files available to AI</p>
+                <h3 className="text-xs font-semibold opacity-50 uppercase tracking-wider mb-1">Your Files</h3>
+                <p className="text-xs opacity-50">{files.length} files available to AI</p>
               </div>
 
               <div className="space-y-1">
@@ -796,39 +807,39 @@ export default function Dashboard() {
                   const { Icon, color } = getSourceIcon(file.source_type || file.source);
                   const isIndexing = file.processing_status === "pending" || file.processing_status === "processing";
                   return (
-                    <motion.div key={file.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="group flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer">
+                    <motion.div key={file.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} whileHover={{ x: 2 }} className="group flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--candy-ink)]/5 cursor-pointer transition-colors">
                       <FileTypeIcon type={file.file_type} className="w-5 h-5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate">{file.filename}</p>
                         {isIndexing ? (
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <Loader2 className="w-3 h-3 text-purple-400 animate-spin shrink-0" />
-                            <span className="text-xs text-purple-400">
+                            <Loader2 className="w-3 h-3 text-[var(--candy-lavender)] animate-spin shrink-0" />
+                            <span className="text-xs text-[var(--candy-lavender)]">
                               {file.processing_status === "pending" || !file.processing_total ? "Queued..." : `Indexing ${file.processing_progress}/${file.processing_total}`}
                             </span>
                           </div>
                         ) : file.processing_status === "error" ? (
-                          <p className="text-xs text-red-400 truncate" title={file.processing_error || undefined}>Indexing failed</p>
+                          <p className="text-xs text-[var(--candy-red)] truncate" title={file.processing_error || undefined}>Indexing failed</p>
                         ) : (
-                          <p className="text-xs text-gray-500">{formatFileSize(file.file_size)} • {formatDate(file.uploaded_at)}</p>
+                          <p className="text-xs opacity-50">{formatFileSize(file.file_size)} • {formatDate(file.uploaded_at)}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-1"><Icon className={`w-3 h-3 ${color}`} /><button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded"><MoreHorizontal className="w-4 h-4 text-gray-400" /></button></div>
+                      <div className="flex items-center gap-1"><Icon className={`w-3 h-3 ${color}`} /><button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[var(--candy-ink)]/10 rounded"><MoreHorizontal className="w-4 h-4 opacity-60" /></button></div>
                     </motion.div>
                   );
                 })}
               </div>
 
-              {files.length > 8 && (<button onClick={() => setShowAllFiles(!showAllFiles)} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white mt-4">{showAllFiles ? <><ChevronUp className="w-4 h-4" /> Show less</> : <><ChevronRight className="w-4 h-4" /> View all files</>}</button>)}
+              {files.length > 8 && (<button onClick={() => setShowAllFiles(!showAllFiles)} className="flex items-center gap-1 text-sm opacity-60 hover:opacity-100 mt-4">{showAllFiles ? <><ChevronUp className="w-4 h-4" /> Show less</> : <><ChevronRight className="w-4 h-4" /> View all files</>}</button>)}
             </div>
           </motion.aside>
         )}
       </AnimatePresence>
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className={`h-14 ${borderColor} border-b flex items-center justify-between px-4 ${cardBg}/80 backdrop-blur-md`}>
+        <header className={`h-14 ${borderColor} border-b flex items-center justify-between px-4 ${cardBg}/80 backdrop-blur-md relative z-10`}>
           <div className="flex items-center gap-1">
-            <motion.button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <motion.button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-[var(--candy-ink)]/10 rounded-lg transition-colors" whileHover={{ scale: 1.1, rotate: -6 }} whileTap={{ scale: 0.95 }}>
               <Menu className="w-5 h-5" />
             </motion.button>
             <AnimatePresence>
@@ -838,9 +849,9 @@ export default function Dashboard() {
                   initial={{ opacity: 0, width: 0, marginLeft: 0 }}
                   animate={{ opacity: 1, width: "auto", marginLeft: 4 }}
                   exit={{ opacity: 0, width: 0, marginLeft: 0 }}
-                  whileHover={{ scale: 1.03 }}
+                  whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.97 }}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors overflow-hidden whitespace-nowrap"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm opacity-70 hover:opacity-100 hover:bg-[var(--candy-ink)]/10 rounded-lg transition-colors overflow-hidden whitespace-nowrap"
                   title="Start a new chat"
                 >
                   <SquarePen className="w-4 h-4 shrink-0" />
@@ -852,26 +863,32 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <motion.button onClick={openHistory} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Chat history"><History className="w-5 h-5" /></motion.button>
-            <Link href="/cost"><motion.button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Cost Monitoring"><DollarSign className="w-4 h-4" /><span className="hidden sm:inline">Costs</span></motion.button></Link>
-            <motion.button onClick={openSettings} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Settings"><Settings className="w-5 h-5" /></motion.button>
-            <SignOutButton><button className="flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition-colors">{user?.imageUrl ? <img src={user.imageUrl} alt="User" className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-sm font-medium">{user?.firstName?.[0] || user?.emailAddresses?.[0]?.emailAddress?.[0] || "U"}</div>}</button></SignOutButton>
+            <motion.button onClick={openHistory} className="p-2 hover:bg-[var(--candy-ink)]/10 rounded-lg transition-colors opacity-70 hover:opacity-100" whileHover={{ scale: 1.1, rotate: 6 }} whileTap={{ scale: 0.95 }} title="Chat history"><History className="w-5 h-5" /></motion.button>
+            <Link href="/cost"><motion.button className="flex items-center gap-2 px-3 py-2 text-sm opacity-70 hover:opacity-100 hover:bg-[var(--candy-ink)]/10 rounded-lg transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} title="Cost Monitoring"><DollarSign className="w-4 h-4 text-[var(--candy-lime)]" /><span className="hidden sm:inline">Costs</span></motion.button></Link>
+            <motion.button onClick={openSettings} className="p-2 hover:bg-[var(--candy-ink)]/10 rounded-lg transition-colors opacity-70 hover:opacity-100" whileHover={{ scale: 1.1, rotate: 45 }} whileTap={{ scale: 0.95 }} title="Settings"><Settings className="w-5 h-5" /></motion.button>
+            <SignOutButton><motion.button whileHover={{ scale: 1.05 }} className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--candy-ink)]/10 rounded-lg transition-colors">{user?.imageUrl ? <img src={user.imageUrl} alt="User" className="w-8 h-8 rounded-full sticker-sm" /> : <div className="w-8 h-8 bg-gradient-to-br from-[var(--candy-cyan)] to-[var(--candy-lavender)] text-white rounded-full flex items-center justify-center text-sm font-medium sticker-sm">{user?.firstName?.[0] || user?.emailAddresses?.[0]?.emailAddress?.[0] || "U"}</div>}</motion.button></SignOutButton>
           </div>
         </header>
 
         <main className="flex-1 flex flex-col overflow-hidden relative">
           <div className="pointer-events-none absolute inset-0 overflow-hidden -z-0">
             <motion.div
-              className="absolute top-[-10%] left-1/3 w-[420px] h-[420px] rounded-full opacity-[0.08]"
-              style={{ background: "radial-gradient(circle, #8b5cf6 0%, transparent 70%)", filter: "blur(90px)" }}
+              className="absolute top-[-10%] left-1/3 w-[420px] h-[420px] rounded-full opacity-[0.14]"
+              style={{ background: "radial-gradient(circle, var(--candy-lavender) 0%, transparent 70%)", filter: "blur(90px)" }}
               animate={{ x: [0, 40, 0], y: [0, 20, 0] }}
               transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
-              className="absolute bottom-[-10%] right-1/4 w-[380px] h-[380px] rounded-full opacity-[0.08]"
-              style={{ background: "radial-gradient(circle, #06b6d4 0%, transparent 70%)", filter: "blur(90px)" }}
+              className="absolute bottom-[-10%] right-1/4 w-[380px] h-[380px] rounded-full opacity-[0.14]"
+              style={{ background: "radial-gradient(circle, var(--candy-cyan) 0%, transparent 70%)", filter: "blur(90px)" }}
               animate={{ x: [0, -30, 0], y: [0, -20, 0] }}
               transition={{ duration: 16, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            />
+            <motion.div
+              className="absolute top-1/3 right-[8%] w-[280px] h-[280px] rounded-full opacity-[0.12]"
+              style={{ background: "radial-gradient(circle, var(--candy-yellow) 0%, transparent 70%)", filter: "blur(80px)" }}
+              animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
+              transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
             />
           </div>
 
@@ -885,23 +902,23 @@ export default function Dashboard() {
                   className="flex items-center justify-center gap-3 mb-6"
                 >
                   <motion.div
-                    animate={{ boxShadow: ["0 0 20px rgba(249,115,22,0.15)", "0 0 40px rgba(249,115,22,0.35)", "0 0 20px rgba(249,115,22,0.15)"] }}
-                    transition={{ duration: 2.5, repeat: Infinity }}
-                    className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center"
+                    animate={{ rotate: [0, 8, -8, 0], boxShadow: ["0 0 20px rgba(255,138,61,0.2)", "0 0 40px rgba(255,95,162,0.4)", "0 0 20px rgba(255,138,61,0.2)"] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                    className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--candy-orange)] to-[var(--candy-pink)] flex items-center justify-center sticker-sm"
                   >
                     <Brain className="w-7 h-7 text-white" />
                   </motion.div>
-                  <h1 className="text-4xl font-light">
+                  <h1 className="text-4xl font-marker">
                     Welcome to <GradientText>MindVault</GradientText>
                   </h1>
                 </motion.div>
-                <p className="text-xl text-gray-400 mb-8">How can I help you today?</p>
+                <p className="text-xl opacity-60 mb-8">How can I help you today?</p>
                 <div className="grid grid-cols-2 gap-3 max-w-lg mx-auto">
                   {files.length > 0 ? ([
-                    { label: "Summarize my documents", icon: FileText },
-                    { label: "What are the key points?", icon: Sparkles },
-                    { label: "Find information about...", icon: Search },
-                    { label: "Compare these documents", icon: Table },
+                    { label: "Summarize my documents", icon: FileText, color: "var(--candy-lavender)" },
+                    { label: "What are the key points?", icon: Sparkles, color: "var(--candy-pink)" },
+                    { label: "Find information about...", icon: Search, color: "var(--candy-cyan)" },
+                    { label: "Compare these documents", icon: Table, color: "var(--candy-orange)" },
                   ].map((prompt, i) => (
                     <motion.button
                       key={prompt.label}
@@ -909,14 +926,14 @@ export default function Dashboard() {
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.15 + i * 0.06, duration: 0.35 }}
-                      whileHover={{ y: -3, borderColor: "rgba(168,85,247,0.5)" }}
-                      whileTap={{ scale: 0.98 }}
-                      className="group p-4 text-left bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
+                      whileHover={{ y: -4, rotate: i % 2 === 0 ? -1.5 : 1.5, scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      className={`group p-4 text-left ${cardBg} sticker-sm rounded-xl transition-colors`}
                     >
-                      <prompt.icon className="w-4 h-4 text-purple-400 mb-2 group-hover:scale-110 transition-transform" />
-                      <p className="text-sm text-gray-300">{prompt.label}</p>
+                      <prompt.icon className="w-4 h-4 mb-2 group-hover:scale-125 transition-transform" style={{ color: prompt.color }} />
+                      <p className="text-sm opacity-80">{prompt.label}</p>
                     </motion.button>
-                  ))) : (<div className="col-span-2 p-4 text-center text-gray-500">Upload files to start chatting with your documents</div>)}
+                  ))) : (<div className="col-span-2 p-4 text-center opacity-50">Upload files to start chatting with your documents</div>)}
                 </div>
               </motion.div>
             </div>
@@ -932,52 +949,52 @@ export default function Dashboard() {
                       className="flex justify-end mb-2"
                     >
                       <div className="max-w-[85%] md:max-w-[70%]">
-                        <div className={`${userMsgBg} rounded-2xl rounded-tr-sm px-5 py-3 text-[15px] whitespace-pre-wrap shadow-lg shadow-black/10`}>{message.content}</div>
-                        <div className="flex items-center justify-end gap-1.5 mt-1.5"><span className="text-xs text-gray-500">{message.timestamp}</span><Check className="w-3.5 h-3.5 text-gray-500" /></div>
+                        <div className={`${userMsgBg} sticker-sm rounded-2xl rounded-tr-sm px-5 py-3 text-[15px] whitespace-pre-wrap`}>{message.content}</div>
+                        <div className="flex items-center justify-end gap-1.5 mt-1.5"><span className="text-xs opacity-40">{message.timestamp}</span><Check className="w-3.5 h-3.5 opacity-40" /></div>
                       </div>
                     </motion.div>
                   ) : (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex gap-3 max-w-[90%]">
                       <motion.div
-                        animate={message.streaming ? { scale: [1, 1.12, 1] } : { scale: 1 }}
-                        transition={{ duration: 1.1, repeat: message.streaming ? Infinity : 0 }}
-                        className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20"
+                        animate={message.streaming ? { scale: [1, 1.12, 1], rotate: [0, 6, -6, 0] } : { scale: 1 }}
+                        transition={{ duration: 1.4, repeat: message.streaming ? Infinity : 0 }}
+                        className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[var(--candy-cyan)] to-[var(--candy-lavender)] flex items-center justify-center sticker-sm"
                       >
                         <Sparkles className="w-4 h-4 text-white" />
                       </motion.div>
                       <div className="flex-1 min-w-0">
-                        <div className={`${cardBg} rounded-2xl rounded-tl-sm px-5 py-4 ${borderColor} border`}>
-                          <div className="text-[15px] leading-relaxed text-gray-200">
+                        <div className={`${cardBg} rounded-2xl rounded-tl-sm px-5 py-4 sticker-sm`}>
+                          <div className="text-[15px] leading-relaxed opacity-90">
                             {message.streaming ? (
-                              <p className="whitespace-pre-wrap mb-0">{message.content}<span className="stream-cursor text-purple-400" /></p>
+                              <p className="whitespace-pre-wrap mb-0">{message.content}<span className="stream-cursor text-[var(--candy-pink)]" /></p>
                             ) : (
-                              <ReactMarkdown components={{ p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>, h1: ({ children }) => <h1 className="text-lg font-semibold mt-3 mb-2 first:mt-0">{children}</h1>, h2: ({ children }) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0">{children}</h2>, h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1 first:mt-0">{children}</h3>, strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>, ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>, ol: ({ children }) => <ol className="list-disc pl-5 mb-3 space-y-1.5">{children}</ol>, li: ({ children }) => <li className="text-gray-300">{children}</li>, code: ({ children }) => <code className="bg-white/10 px-1.5 py-0.5 rounded text-sm font-mono text-gray-300">{children}</code>, pre: ({ children }) => <pre className="bg-white/5 border border-white/10 rounded-lg p-3 overflow-x-auto mb-3 text-sm">{children}</pre>, a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">{children}</a> }}>{message.content}</ReactMarkdown>
+                              <ReactMarkdown components={{ p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>, h1: ({ children }) => <h1 className="text-lg font-semibold mt-3 mb-2 first:mt-0">{children}</h1>, h2: ({ children }) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0">{children}</h2>, h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1 first:mt-0">{children}</h3>, strong: ({ children }) => <strong className="font-semibold">{children}</strong>, ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>, ol: ({ children }) => <ol className="list-disc pl-5 mb-3 space-y-1.5">{children}</ol>, li: ({ children }) => <li className="opacity-85">{children}</li>, code: ({ children }) => <code className="bg-[var(--candy-ink)]/10 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>, pre: ({ children }) => <pre className="bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/10 rounded-lg p-3 overflow-x-auto mb-3 text-sm">{children}</pre>, a: ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--candy-pink)] hover:underline">{children}</a> }}>{message.content}</ReactMarkdown>
                             )}
                           </div>
                         </div>
                         <div className="mt-1.5 flex items-center gap-3">
-                          <span className="text-xs text-gray-500">{message.timestamp}</span>
-                          {message.fromCache && (<span className="text-[10px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded flex items-center gap-1"><Zap className="w-3 h-3" />Cached{message.cacheHits && message.cacheHits > 1 && <span className="text-green-500">({message.cacheHits} hits)</span>}</span>)}
+                          <span className="text-xs opacity-40">{message.timestamp}</span>
+                          {message.fromCache && (<span className="text-[10px] text-[var(--candy-lime)] bg-[var(--candy-lime)]/10 px-1.5 py-0.5 rounded flex items-center gap-1"><Zap className="w-3 h-3" />Cached{message.cacheHits && message.cacheHits > 1 && <span>({message.cacheHits} hits)</span>}</span>)}
                           {!message.streaming && message.content && (
                             <button
                               onClick={() => copyMessage(message.id, message.content)}
-                              className="opacity-0 group-hover/msg:opacity-100 flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-all"
+                              className="opacity-0 group-hover/msg:opacity-100 flex items-center gap-1 text-xs opacity-50 hover:opacity-100 transition-all"
                               title="Copy response"
                             >
-                              {copiedId === message.id ? <><CopyCheck className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Copied</span></> : <><Copy className="w-3.5 h-3.5" />Copy</>}
+                              {copiedId === message.id ? <><CopyCheck className="w-3.5 h-3.5 text-[var(--candy-lime)]" /><span className="text-[var(--candy-lime)]">Copied</span></> : <><Copy className="w-3.5 h-3.5" />Copy</>}
                             </button>
                           )}
                         </div>
                         {message.sources && message.sources.length > 0 && !message.streaming && (
                           <div className="mt-4">
-                            <p className="text-sm text-gray-400 mb-2 flex items-center gap-1.5"><Quote className="w-3.5 h-3.5" />Sources</p>
+                            <p className="text-sm opacity-50 mb-2 flex items-center gap-1.5"><Quote className="w-3.5 h-3.5" />Sources</p>
                             <div className="flex flex-wrap gap-2">
                               {message.sources.map((source, i) => {
                                 const { Icon, color } = getSourceIcon(source.source_type || source.source);
                                 return (
-                                  <motion.button key={i} onClick={() => openSourceViewer(source)} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.3 }} whileHover={{ y: -2 }} title={source.content} className={`flex items-center gap-2 px-3 py-2 ${cardBg} ${borderColor} border rounded-lg hover:border-purple-500/40 cursor-pointer transition-colors`}>
-                                    <FileText className="w-4 h-4 text-gray-500 shrink-0" />
-                                    <span className="text-sm text-gray-300 max-w-[160px] truncate">{source.file_name || source.filename}</span>
+                                  <motion.button key={i} onClick={() => openSourceViewer(source)} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.3 }} whileHover={{ y: -2, rotate: -1 }} title={source.content} className={`flex items-center gap-2 px-3 py-2 ${cardBg} sticker-sm rounded-lg cursor-pointer transition-colors`}>
+                                    <FileText className="w-4 h-4 opacity-50 shrink-0" />
+                                    <span className="text-sm opacity-80 max-w-[160px] truncate">{source.file_name || source.filename}</span>
                                     <Icon className={`w-3 h-3 shrink-0 ${color}`} />
                                   </motion.button>
                                 );
@@ -990,7 +1007,7 @@ export default function Dashboard() {
                   )}
                 </div>
               ))}
-              <AnimatePresence>{isLoading && (<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="flex gap-3 mb-6"><div className="shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center"><Sparkles className="w-4 h-4 text-white" /></div><div className={`${cardBg} rounded-2xl rounded-tl-sm px-5 py-4 ${borderColor} border min-w-[200px]`}><div className="flex items-center gap-1.5"><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0 }} /><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.2 }} /><motion.div className="w-2 h-2 bg-purple-500 rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }} /></div></div></motion.div>)}</AnimatePresence>
+              <AnimatePresence>{isLoading && (<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="flex gap-3 mb-6"><div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[var(--candy-cyan)] to-[var(--candy-lavender)] flex items-center justify-center sticker-sm"><Sparkles className="w-4 h-4 text-white" /></div><div className={`${cardBg} rounded-2xl rounded-tl-sm px-5 py-4 sticker-sm min-w-[200px]`}><div className="flex items-center gap-1.5"><motion.div className="w-2 h-2 bg-[var(--candy-pink)] rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0 }} /><motion.div className="w-2 h-2 bg-[var(--candy-lavender)] rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.2 }} /><motion.div className="w-2 h-2 bg-[var(--candy-cyan)] rounded-full" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.4, repeat: Infinity, delay: 0.4 }} /></div></div></motion.div>)}</AnimatePresence>
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -1004,7 +1021,7 @@ export default function Dashboard() {
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => scrollToBottom()}
-                className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-9 h-9 rounded-full ${cardBg} ${borderColor} border shadow-lg flex items-center justify-center text-gray-300 hover:text-white`}
+                className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-9 h-9 rounded-full ${cardBg} sticker-sm flex items-center justify-center opacity-70 hover:opacity-100`}
                 title="Scroll to latest"
               >
                 <ArrowDown className="w-4 h-4" />
@@ -1025,27 +1042,27 @@ export default function Dashboard() {
                     />
                   )}
                 </AnimatePresence>
-                <div className={`relative ${inputBg} ${borderColor} border rounded-2xl transition-colors`}>
+                <div className={`relative ${inputBg} sticker-sm rounded-2xl transition-colors`}>
                 <div className="flex items-end gap-2 p-2">
                   <div className="relative">
-                    <motion.button onClick={openIntegrations} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-8 h-8 flex items-center justify-center border border-white/20 rounded-xl hover:bg-white/10 text-gray-400 shrink-0 mb-1" title="Integrations"><Plus className="w-4 h-4" /></motion.button>
-                    <AnimatePresence>{showIntegrations && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowIntegrations(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="absolute left-0 bottom-full mb-2 w-[420px] max-h-[500px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Integrations</h3><button onClick={() => setShowIntegrations(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 max-h-[420px] overflow-y-auto space-y-4">{integrations.map((integration) => {
+                    <motion.button onClick={openIntegrations} whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.95 }} className={`w-8 h-8 flex items-center justify-center border ${borderColor} rounded-xl hover:bg-[var(--candy-ink)]/10 opacity-70 hover:opacity-100 shrink-0 mb-1`} title="Integrations"><Plus className="w-4 h-4" /></motion.button>
+                    <AnimatePresence>{showIntegrations && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowIntegrations(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="absolute left-0 bottom-full mb-2 w-[420px] max-h-[500px] bg-[var(--candy-card)] text-[var(--candy-ink)] sticker rounded-2xl z-50 overflow-hidden"><div className="p-4 border-b border-[var(--candy-ink)]/12 flex items-center justify-between"><h3 className="font-semibold">Integrations</h3><button onClick={() => setShowIntegrations(false)}><X className="w-4 h-4 text-[var(--candy-ink)]/60" /></button></div><div className="p-4 max-h-[420px] overflow-y-auto space-y-4">{integrations.map((integration) => {
                       const IntIcon = INTEGRATION_ICONS[integration.id] || Cloud;
                       const intColor = INTEGRATION_COLORS[integration.id] || "text-blue-400";
                       return (
-                      <div key={integration.id} className="border border-white/10 rounded-xl p-3">
+                      <div key={integration.id} className="border border-[var(--candy-ink)]/12 rounded-xl p-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                            <div className="w-9 h-9 rounded-lg bg-[var(--candy-ink)]/10 flex items-center justify-center">
                               <IntIcon className={`w-4 h-4 ${intColor}`} />
                             </div>
                             <div>
                               <p className="font-medium text-sm">{integration.name}</p>
-                              <p className="text-xs text-gray-500">{integration.description}</p>
+                              <p className="text-xs text-[var(--candy-ink)]/45">{integration.description}</p>
                             </div>
                           </div>
                           {integration.connected ? (
-                            <span className="text-xs text-green-400 flex items-center gap-1 shrink-0">
+                            <span className="text-xs text-[var(--candy-lime)] flex items-center gap-1 shrink-0">
                               <Check className="w-3 h-3" />Connected
                             </span>
                           ) : (
@@ -1053,7 +1070,7 @@ export default function Dashboard() {
                               onClick={() => connectIntegration(integration.id)}
                               disabled={connectingDrive}
                               whileHover={{ scale: 1.02 }}
-                              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50 shrink-0"
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] hover:brightness-110 rounded-lg disabled:opacity-50 shrink-0"
                             >
                               {connectingDrive ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3" />}
                               Connect
@@ -1063,26 +1080,26 @@ export default function Dashboard() {
                         {integration.connected && integration.id === "google_drive" && (
                           <div className="mt-3 space-y-1">
                             <div className="flex items-center justify-between mb-1">
-                              <p className="text-xs text-gray-500">Files in your Drive</p>
-                              <button onClick={fetchDriveFiles} className="text-gray-500 hover:text-white">
+                              <p className="text-xs text-[var(--candy-ink)]/45">Files in your Drive</p>
+                              <button onClick={fetchDriveFiles} className="text-[var(--candy-ink)]/45 hover:text-[var(--candy-ink)]">
                                 <RefreshCw className={`w-3 h-3 ${driveFilesLoading ? "animate-spin" : ""}`} />
                               </button>
                             </div>
                             {driveFilesLoading ? (
                               <div className="flex justify-center py-3">
-                                <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                                <Loader2 className="w-4 h-4 animate-spin text-[var(--candy-ink)]/45" />
                               </div>
                             ) : driveFiles.length === 0 ? (
-                              <p className="text-xs text-gray-500 py-2">No files found</p>
+                              <p className="text-xs text-[var(--candy-ink)]/45 py-2">No files found</p>
                             ) : (
                               driveFiles.map((file) => (
-                                <div key={file.id} className="flex items-center gap-2 p-2 bg-white/5 rounded-lg">
-                                  <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                                <div key={file.id} className="flex items-center gap-2 p-2 bg-[var(--candy-ink)]/5 rounded-lg">
+                                  <FileText className="w-4 h-4 text-[var(--candy-ink)]/60 shrink-0" />
                                   <span className="flex-1 text-sm truncate">{file.name}</span>
                                   <button
                                     onClick={() => syncDriveFile(file.id)}
                                     disabled={syncingFileId === file.id}
-                                    className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded disabled:opacity-50"
+                                    className="text-xs px-2 py-1 bg-[var(--candy-ink)]/10 hover:bg-[var(--candy-ink)]/20 rounded disabled:opacity-50"
                                   >
                                     {syncingFileId === file.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "Import"}
                                   </button>
@@ -1108,24 +1125,24 @@ export default function Dashboard() {
                     }}
                     placeholder={files.length > 0 ? "Ask about your documents... (Enter to send, Shift+Enter for a new line)" : "Upload files to start chatting"}
                     disabled={files.length === 0}
-                    className="flex-1 bg-transparent px-3 py-3 text-white placeholder-gray-500 focus:outline-none disabled:opacity-50 resize-none max-h-[200px] hide-scrollbar leading-relaxed"
+                    className="flex-1 bg-transparent px-3 py-3 placeholder:opacity-40 focus:outline-none disabled:opacity-50 resize-none max-h-[200px] hide-scrollbar leading-relaxed"
                   />
                   <div className="flex items-center gap-2 mb-1 shrink-0">
                     {modelsLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                      <Loader2 className="w-5 h-5 animate-spin opacity-40" />
                     ) : providers.length > 0 ? (
-                      <motion.button onClick={() => setShowModelSelector(true)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white border border-white/10 rounded-xl">
+                      <motion.button onClick={() => setShowModelSelector(true)} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className={`flex items-center gap-2 px-3 py-2 text-sm opacity-70 hover:opacity-100 border ${borderColor} rounded-xl`}>
                         <span className="hidden sm:inline">{selectedProvider?.name || "Select Model"}</span><ChevronDown className="w-3 h-3" />
                       </motion.button>
                     ) : (
-                      <div className="flex items-center gap-1 text-xs text-orange-400"><AlertCircle className="w-4 h-4" />No models</div>
+                      <div className="flex items-center gap-1 text-xs text-[var(--candy-orange)]"><AlertCircle className="w-4 h-4" />No models</div>
                     )}
                     <motion.button
                       onClick={handleSendMessage}
                       disabled={!inputMessage.trim() || isLoading || files.length === 0}
-                      whileHover={inputMessage.trim() ? { scale: 1.06 } : {}}
-                      whileTap={inputMessage.trim() ? { scale: 0.94 } : {}}
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${inputMessage.trim() && !isLoading ? "bg-gradient-to-br from-purple-500 to-purple-700 text-white shadow-lg shadow-purple-500/30" : "bg-white/5 text-gray-600 cursor-not-allowed"}`}
+                      whileHover={inputMessage.trim() ? { scale: 1.1, rotate: -6 } : {}}
+                      whileTap={inputMessage.trim() ? { scale: 0.92 } : {}}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${inputMessage.trim() && !isLoading ? "bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-orange)] text-white sticker-sm" : "bg-[var(--candy-ink)]/5 opacity-40 cursor-not-allowed"}`}
                       title="Send message"
                     >
                       {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
@@ -1134,30 +1151,30 @@ export default function Dashboard() {
                 </div>
                 </div>
               </div>
-              <p className="text-[11px] text-gray-600 text-center mt-2">MindVault can make mistakes. Verify important answers against your source documents.</p>
+              <p className="text-[11px] opacity-40 text-center mt-2">MindVault can make mistakes. Verify important answers against your source documents.</p>
             </div>
           </div>
         </main>
       </div>
 
-      <AnimatePresence>{showModelSelector && providers.length > 0 && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModelSelector(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="fixed right-4 bottom-24 w-[400px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Choose a model</h3><button onClick={() => setShowModelSelector(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 max-h-[400px] overflow-y-auto">{providers.filter(p => p.type === "cloud").length > 0 && (<><p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Cloud models</p><div className="space-y-1 mb-6">{providers.filter(p => p.type === "cloud").map((provider) => (<button key={provider.id} onClick={() => { setLLMProvider(provider.id); setShowModelSelector(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${selectedProvider?.id === provider.id ? "bg-white/10" : "hover:bg-white/5"}`}><div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Cpu className="w-4 h-4" /></div><div className="flex-1 text-left"><span className="font-medium">{provider.name}</span><p className="text-xs text-gray-500">{provider.model}</p></div>{selectedProvider?.id === provider.id && <Check className="w-4 h-4 text-purple-400" />}</button>))}</div></>)}{providers.filter(p => p.type === "local").length > 0 && (<><p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Local models</p><div className="space-y-1">{providers.filter(p => p.type === "local").map((provider) => (<button key={provider.id} onClick={() => { setLLMProvider(provider.id); setShowModelSelector(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${selectedProvider?.id === provider.id ? "bg-white/10" : "hover:bg-white/5"}`}><div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><HardDrive className="w-4 h-4" /></div><div className="flex-1 text-left"><span className="font-medium">{provider.name}</span><p className="text-xs text-gray-500">{provider.model}</p></div><span className="text-xs text-gray-500 bg-white/10 px-2 py-1 rounded">Local</span>{selectedProvider?.id === provider.id && <Check className="w-4 h-4 text-purple-400" />}</button>))}</div></>)}</div></motion.div></>)}</AnimatePresence>
+      <AnimatePresence>{showModelSelector && providers.length > 0 && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModelSelector(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="fixed right-4 bottom-24 w-[400px] bg-[var(--candy-card)] text-[var(--candy-ink)] sticker rounded-2xl z-50 overflow-hidden"><div className="p-4 border-b border-[var(--candy-ink)]/12 flex items-center justify-between"><h3 className="font-semibold">Choose a model</h3><button onClick={() => setShowModelSelector(false)}><X className="w-4 h-4 text-[var(--candy-ink)]/60" /></button></div><div className="p-4 max-h-[400px] overflow-y-auto">{providers.filter(p => p.type === "cloud").length > 0 && (<><p className="text-xs text-[var(--candy-ink)]/45 uppercase tracking-wider mb-3">Cloud models</p><div className="space-y-1 mb-6">{providers.filter(p => p.type === "cloud").map((provider) => (<button key={provider.id} onClick={() => { setLLMProvider(provider.id); setShowModelSelector(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${selectedProvider?.id === provider.id ? "bg-[var(--candy-ink)]/10" : "hover:bg-[var(--candy-ink)]/5"}`}><div className="w-8 h-8 rounded-lg bg-[var(--candy-ink)]/10 flex items-center justify-center"><Cpu className="w-4 h-4" /></div><div className="flex-1 text-left"><span className="font-medium">{provider.name}</span><p className="text-xs text-[var(--candy-ink)]/45">{provider.model}</p></div>{selectedProvider?.id === provider.id && <Check className="w-4 h-4 text-[var(--candy-lavender)]" />}</button>))}</div></>)}{providers.filter(p => p.type === "local").length > 0 && (<><p className="text-xs text-[var(--candy-ink)]/45 uppercase tracking-wider mb-3">Local models</p><div className="space-y-1">{providers.filter(p => p.type === "local").map((provider) => (<button key={provider.id} onClick={() => { setLLMProvider(provider.id); setShowModelSelector(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${selectedProvider?.id === provider.id ? "bg-[var(--candy-ink)]/10" : "hover:bg-[var(--candy-ink)]/5"}`}><div className="w-8 h-8 rounded-lg bg-[var(--candy-ink)]/10 flex items-center justify-center"><HardDrive className="w-4 h-4" /></div><div className="flex-1 text-left"><span className="font-medium">{provider.name}</span><p className="text-xs text-[var(--candy-ink)]/45">{provider.model}</p></div><span className="text-xs text-[var(--candy-ink)]/45 bg-[var(--candy-ink)]/10 px-2 py-1 rounded">Local</span>{selectedProvider?.id === provider.id && <Check className="w-4 h-4 text-[var(--candy-lavender)]" />}</button>))}</div></>)}</div></motion.div></>)}</AnimatePresence>
 
-      <AnimatePresence>{showSettings && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSettings(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[440px] h-fit bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Model API Keys</h3><button onClick={() => setShowSettings(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"><p className="text-xs text-gray-500">Add your own API key to unlock a model in the selector below. Local Ollama models need no key.</p>{apiKeys.map((key) => (<div key={key.provider} className="border border-white/10 rounded-xl p-3"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><Key className="w-4 h-4 text-gray-400" /><span className="text-sm font-medium">{PROVIDER_LABELS[key.provider] || key.provider}</span></div>{key.configured && <span className="text-xs text-green-400">{key.source === "user" ? "Your key saved" : "Set by server"}</span>}</div><div className="flex items-center gap-2"><input type="password" placeholder={key.configured ? "Replace key..." : "Enter API key..."} value={apiKeyInputs[key.provider] || ""} onChange={(e) => setApiKeyInputs((prev) => ({ ...prev, [key.provider]: e.target.value }))} className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" /><button onClick={() => saveApiKey(key.provider)} disabled={savingProvider === key.provider || !apiKeyInputs[key.provider]?.trim()} className="px-3 py-2 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50">{savingProvider === key.provider ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}</button>{key.source === "user" && <button onClick={() => removeApiKey(key.provider)} disabled={savingProvider === key.provider} className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-lg disabled:opacity-50" title="Remove key"><Trash2 className="w-3.5 h-3.5" /></button>}</div></div>))}
+      <AnimatePresence>{showSettings && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSettings(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[440px] h-fit bg-[var(--candy-card)] text-[var(--candy-ink)] sticker rounded-2xl z-50 overflow-hidden"><div className="p-4 border-b border-[var(--candy-ink)]/12 flex items-center justify-between"><h3 className="font-semibold">Model API Keys</h3><button onClick={() => setShowSettings(false)}><X className="w-4 h-4 text-[var(--candy-ink)]/60" /></button></div><div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"><p className="text-xs text-[var(--candy-ink)]/45">Add your own API key to unlock a model in the selector below. Local Ollama models need no key.</p>{apiKeys.map((key) => (<div key={key.provider} className="border border-[var(--candy-ink)]/12 rounded-xl p-3"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><Key className="w-4 h-4 text-[var(--candy-ink)]/60" /><span className="text-sm font-medium">{PROVIDER_LABELS[key.provider] || key.provider}</span></div>{key.configured && <span className="text-xs text-[var(--candy-lime)]">{key.source === "user" ? "Your key saved" : "Set by server"}</span>}</div><div className="flex items-center gap-2"><input type="password" placeholder={key.configured ? "Replace key..." : "Enter API key..."} value={apiKeyInputs[key.provider] || ""} onChange={(e) => setApiKeyInputs((prev) => ({ ...prev, [key.provider]: e.target.value }))} className="flex-1 bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/12 rounded-lg px-3 py-2 text-sm placeholder:opacity-40 focus:outline-none focus:border-[var(--candy-lavender)]" /><button onClick={() => saveApiKey(key.provider)} disabled={savingProvider === key.provider || !apiKeyInputs[key.provider]?.trim()} className="px-3 py-2 text-xs bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] hover:brightness-110 rounded-lg disabled:opacity-50">{savingProvider === key.provider ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}</button>{key.source === "user" && <button onClick={() => removeApiKey(key.provider)} disabled={savingProvider === key.provider} className="p-2 text-[var(--candy-ink)]/60 hover:text-[var(--candy-red)] hover:bg-[var(--candy-ink)]/10 rounded-lg disabled:opacity-50" title="Remove key"><Trash2 className="w-3.5 h-3.5" /></button>}</div></div>))}
 
-              <div className="border-t border-white/10 pt-4">
+              <div className="border-t border-[var(--candy-ink)]/12 pt-4">
                 <p className="text-sm font-medium mb-1">Embedding model</p>
-                <p className="text-xs text-gray-500 mb-2">Used to index your documents and match them to your questions. Fetched live from whichever provider you have a key for.</p>
+                <p className="text-xs text-[var(--candy-ink)]/45 mb-2">Used to index your documents and match them to your questions. Fetched live from whichever provider you have a key for.</p>
                 {embeddingModelsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" />Loading models...</div>
+                  <div className="flex items-center gap-2 text-sm text-[var(--candy-ink)]/45"><Loader2 className="w-4 h-4 animate-spin" />Loading models...</div>
                 ) : embeddingModels.length === 0 ? (
-                  <p className="text-xs text-orange-400">No embedding models available yet - add an API key above (Mistral, Gemini) or run Ollama locally.</p>
+                  <p className="text-xs text-[var(--candy-orange)]">No embedding models available yet - add an API key above (Mistral, Gemini) or run Ollama locally.</p>
                 ) : (
                   <div className="relative">
                     <select
                       value={currentEmbeddingProvider || ""}
                       onChange={(e) => setEmbeddingProvider(e.target.value)}
                       disabled={savingEmbeddingProvider}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 disabled:opacity-50"
+                      className="w-full bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/12 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[var(--candy-lavender)] disabled:opacity-50"
                     >
                       {embeddingModels.map((m) => (
                         <option key={m.id} value={m.id}>{PROVIDER_LABELS[base_provider_client(m.id)] || base_provider_client(m.id)} - {m.model}</option>
@@ -1173,16 +1190,16 @@ export default function Dashboard() {
         {showHistory && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowHistory(false)} className="fixed inset-0 bg-black/50 z-50" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[480px] h-[600px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl flex flex-col">
-              <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[480px] h-[600px] bg-[var(--candy-card)] text-[var(--candy-ink)] sticker rounded-2xl z-50 overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-[var(--candy-ink)]/12 flex items-center justify-between shrink-0">
                 <h3 className="font-semibold">Chat history</h3>
-                <button onClick={() => setShowHistory(false)}><X className="w-4 h-4 text-gray-400" /></button>
+                <button onClick={() => setShowHistory(false)}><X className="w-4 h-4 text-[var(--candy-ink)]/60" /></button>
               </div>
               <div className="flex-1 overflow-y-auto p-3">
                 {historyLoading ? (
-                  <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-500" /></div>
+                  <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-[var(--candy-ink)]/45" /></div>
                 ) : chatHistory.length === 0 ? (
-                  <p className="text-center text-gray-500 py-10 text-sm">No past conversations yet</p>
+                  <p className="text-center text-[var(--candy-ink)]/45 py-10 text-sm">No past conversations yet</p>
                 ) : (
                   <div className="space-y-1">
                     {chatHistory.map((item) => (
@@ -1190,10 +1207,10 @@ export default function Dashboard() {
                         key={item.id}
                         onClick={() => loadHistoryItem(item)}
                         whileHover={{ x: 2 }}
-                        className="w-full text-left p-3 rounded-xl hover:bg-white/5 transition-colors"
+                        className="w-full text-left p-3 rounded-xl hover:bg-[var(--candy-ink)]/5 transition-colors"
                       >
-                        <p className="text-sm text-gray-200 truncate">{item.question}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">{item.answer}</p>
+                        <p className="text-sm text-[var(--candy-ink)]/90 truncate">{item.question}</p>
+                        <p className="text-xs text-[var(--candy-ink)]/45 mt-0.5 truncate">{item.answer}</p>
                         <p className="text-[11px] text-gray-600 mt-1">{formatDateTime(item.created_at)}</p>
                       </motion.button>
                     ))}
@@ -1209,18 +1226,18 @@ export default function Dashboard() {
         {showWorkspacePanel && activeWorkspace && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowWorkspacePanel(false)} className="fixed inset-0 bg-black/50 z-50" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[460px] h-fit max-h-[70vh] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl flex flex-col">
-              <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[460px] h-fit max-h-[70vh] bg-[var(--candy-card)] text-[var(--candy-ink)] sticker rounded-2xl z-50 overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-[var(--candy-ink)]/12 flex items-center justify-between shrink-0">
                 <div>
                   <h3 className="font-semibold">{activeWorkspace.name}</h3>
-                  <p className="text-xs text-gray-500">{workspaceMembers.length} member{workspaceMembers.length === 1 ? "" : "s"}</p>
+                  <p className="text-xs text-[var(--candy-ink)]/45">{workspaceMembers.length} member{workspaceMembers.length === 1 ? "" : "s"}</p>
                 </div>
-                <button onClick={() => setShowWorkspacePanel(false)}><X className="w-4 h-4 text-gray-400" /></button>
+                <button onClick={() => setShowWorkspacePanel(false)}><X className="w-4 h-4 text-[var(--candy-ink)]/60" /></button>
               </div>
 
               {activeWorkspace.role === "owner" && (
-                <div className="p-4 border-b border-white/10 shrink-0">
-                  <label className="block text-xs text-gray-500 mb-2">Invite a teammate</label>
+                <div className="p-4 border-b border-[var(--candy-ink)]/12 shrink-0">
+                  <label className="block text-xs text-[var(--candy-ink)]/45 mb-2">Invite a teammate</label>
                   <div className="flex items-center gap-2">
                     <input
                       type="email"
@@ -1228,17 +1245,17 @@ export default function Dashboard() {
                       onChange={(e) => setInviteEmail(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && inviteToWorkspace()}
                       placeholder="teammate@company.com"
-                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                      className="flex-1 bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/12 rounded-lg px-3 py-2 text-sm placeholder:opacity-40 focus:outline-none focus:border-[var(--candy-lavender)]"
                     />
                     <select
                       value={inviteRole}
                       onChange={(e) => setInviteRole(e.target.value as "editor" | "viewer")}
-                      className="bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-sm text-white focus:outline-none"
+                      className="bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/12 rounded-lg px-2 py-2 text-sm focus:outline-none"
                     >
                       <option value="viewer">Viewer</option>
                       <option value="editor">Editor</option>
                     </select>
-                    <button onClick={inviteToWorkspace} disabled={!inviteEmail.trim() || workspaceBusy} className="px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50">
+                    <button onClick={inviteToWorkspace} disabled={!inviteEmail.trim() || workspaceBusy} className="px-3 py-2 text-sm bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] hover:brightness-110 rounded-lg disabled:opacity-50">
                       {workspaceBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                     </button>
                   </div>
@@ -1248,20 +1265,20 @@ export default function Dashboard() {
 
               <div className="flex-1 overflow-y-auto p-3">
                 {workspaceMembers.map((member) => (
-                  <div key={member.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-xs font-medium shrink-0">
+                  <div key={member.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-[var(--candy-ink)]/5">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--candy-cyan)] to-[var(--candy-lavender)] text-white flex items-center justify-center text-xs font-medium shrink-0">
                       {member.email[0]?.toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{member.email}</p>
-                      {member.status === "invited" && <p className="text-[11px] text-orange-400">Invited - waiting for sign up</p>}
+                      {member.status === "invited" && <p className="text-[11px] text-[var(--candy-orange)]">Invited - waiting for sign up</p>}
                     </div>
-                    <span className="flex items-center gap-1 text-xs text-gray-500 shrink-0">
+                    <span className="flex items-center gap-1 text-xs text-[var(--candy-ink)]/45 shrink-0">
                       {member.role === "owner" ? <Crown className="w-3.5 h-3.5 text-amber-400" /> : member.role === "editor" ? <Pencil className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       {member.role}
                     </span>
                     {activeWorkspace.role === "owner" && member.role !== "owner" && (
-                      <button onClick={() => removeWorkspaceMember(member.id)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-white/10 rounded-lg shrink-0" title="Remove member">
+                      <button onClick={() => removeWorkspaceMember(member.id)} className="p-1.5 text-[var(--candy-ink)]/45 hover:text-[var(--candy-red)] hover:bg-[var(--candy-ink)]/10 rounded-lg shrink-0" title="Remove member">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -1282,6 +1299,7 @@ export default function Dashboard() {
           onClose={() => setViewerFile(null)}
         />
       )}
+    </div>
     </div>
   );
 }
