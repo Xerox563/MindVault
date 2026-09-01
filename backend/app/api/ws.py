@@ -26,8 +26,7 @@ async def file_progress_ws(websocket: WebSocket, file_id: int, token: str):
             await websocket.close(code=4403)
             return
 
-        # if it's already done by the time the client connects, just report that
-        # and skip subscribing - nothing more will ever be published for this file
+        # already finished by the time the client connects, so just report that
         if file.processing_status in ("complete", "error"):
             await websocket.accept()
             await websocket.send_json({

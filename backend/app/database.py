@@ -8,8 +8,7 @@ _is_sqlite = settings.DATABASE_URL.startswith("sqlite")
 engine = create_engine(
     settings.DATABASE_URL,
     connect_args={"check_same_thread": False} if _is_sqlite else {},
-    # Supabase (and most managed Postgres) drop idle connections; pre_ping
-    # avoids "server closed the connection unexpectedly" on the next request.
+    # pre_ping avoids stale connection errors on managed postgres like supabase
     pool_pre_ping=not _is_sqlite,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -24,7 +23,6 @@ def get_db():
         db.close()
 
 def _add_missing_columns():
-    """Lightweight migration: add any model columns missing from existing tables (SQLite dev DB, no Alembic)."""
     inspector = inspect(engine)
     with engine.begin() as conn:
         for table in Base.metadata.tables.values():
@@ -36,9 +34,7 @@ def _add_missing_columns():
                     continue
                 col_type = column.type.compile(engine.dialect)
                 stmt = f"ALTER TABLE {table.name} ADD COLUMN {column.name} {col_type}"
-                # scalar defaults (e.g. Column(String, default="complete")) get backfilled
-                # onto existing rows too, not just new ones - callable defaults like
-                # datetime.utcnow are skipped since the app always sets those explicitly
+                # a simple default like default="complete" also backfills onto existing rows
                 if column.default is not None and getattr(column.default, "is_scalar", False):
                     default_value = column.default.arg
                     if isinstance(default_value, bool):

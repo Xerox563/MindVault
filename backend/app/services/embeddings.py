@@ -6,17 +6,14 @@ from app.utils.retry import retry
 from app.services.llm_service import llm_service
 
 def estimate_tokens(text: str) -> int:
-    """Rough token estimation: ~4 characters per token on average"""
     return len(text) // 4
 
 @retry(max_attempts=3, delay=1.0)
 def get_embedding(text: str, provider_id: Optional[str] = None, api_key: Optional[str] = None, db=None, user_id: int = None) -> list[float]:
-    """Generate embedding using the given (or default) LLM provider"""
     embedding, usage = llm_service.generate_embedding(text, provider_id=provider_id or settings.LLM_PROVIDER, api_key=api_key)
     if embedding:
         log_info(f"Generated embedding for text length {len(text)}")
 
-        # Track cost if db and user_id provided
         if db and user_id:
             try:
                 from app.services.cost import track_cost
@@ -38,11 +35,9 @@ def get_embedding(text: str, provider_id: Optional[str] = None, api_key: Optiona
 
 @retry(max_attempts=3, delay=1.0)
 def get_chat_response(prompt: str, context: str = "", provider_id: Optional[str] = None, api_key: Optional[str] = None, db=None, user_id: int = None) -> str:
-    """Generate chat response using the given (or default) LLM provider"""
     response, usage = llm_service.generate_chat_response(prompt, context, provider_id=provider_id or settings.LLM_PROVIDER, api_key=api_key)
     log_info(f"Generated chat response for question length {len(prompt)}")
 
-    # Track cost if db and user_id provided
     if db and user_id:
         try:
             from app.services.cost import track_cost
@@ -66,7 +61,6 @@ def get_chat_response(prompt: str, context: str = "", provider_id: Optional[str]
     return response
 
 def get_chat_response_stream(prompt: str, context: str = "", provider_id: Optional[str] = None, api_key: Optional[str] = None, db=None, user_id: int = None):
-    """Same as get_chat_response but yields text as it arrives, then tracks cost once done"""
     chunks = []
     final_usage = None
     for delta, usage in llm_service.generate_chat_response_stream(prompt, context, provider_id=provider_id or settings.LLM_PROVIDER, api_key=api_key):

@@ -1,440 +1,413 @@
 "use client";
 
-import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef } from "react";
+import { motion } from "framer-motion";
 import Link from "next/link";
-import { 
-  ArrowRight, 
-  Upload, 
-  MessageSquare, 
-  Brain, 
-  Zap, 
+import {
+  ArrowRight,
+  Upload,
+  MessageSquare,
+  Brain,
+  Zap,
   Shield,
-  ChevronDown,
   Sparkles,
   FileText,
   Search,
-  Cloud
+  Cloud,
 } from "lucide-react";
-import { 
-  AnimatedBackground, 
-  FloatingElement, 
-  GradientText,
-  TextReveal,
-  FadeIn,
-  StaggerContainer,
-  StaggerItem,
-  SpotlightCard
-} from "@/components/animations";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-export default function LandingPage() {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ["start start", "end start"],
-  });
+const FEATURES = [
+  {
+    icon: Upload,
+    title: "Smart Upload",
+    description: "Drop in PDFs, Word docs, spreadsheets, whatever. The AI reads and indexes it all.",
+    color: "var(--candy-yellow)",
+    blob: "blob-1",
+    rotate: -3,
+  },
+  {
+    icon: MessageSquare,
+    title: "Natural Chat",
+    description: "Ask questions like a normal person. Get real answers with the receipts to prove it.",
+    color: "var(--candy-pink)",
+    blob: "blob-2",
+    rotate: 2,
+  },
+  {
+    icon: Brain,
+    title: "Actually Smart AI",
+    description: "Pick Mistral, Gemini, OpenRouter, or run it fully local. Your call, your keys.",
+    color: "var(--candy-lavender)",
+    blob: "blob-3",
+    rotate: -2,
+  },
+  {
+    icon: Cloud,
+    title: "Google Drive Sync",
+    description: "Connect Drive once and everything in it becomes searchable. No more digging.",
+    color: "var(--candy-lime)",
+    blob: "blob-4",
+    rotate: 3,
+  },
+  {
+    icon: Shield,
+    title: "Your Data, Locked Up",
+    description: "Encrypted keys, scoped access, workspaces with real permissions. Nothing leaky.",
+    color: "var(--candy-cyan)",
+    blob: "blob-1",
+    rotate: 2,
+  },
+  {
+    icon: Zap,
+    title: "Fast, For Real",
+    description: "Streaming answers, hybrid search, background indexing. No spinning wheels of doom.",
+    color: "var(--candy-orange)",
+    blob: "blob-2",
+    rotate: -3,
+  },
+];
 
-  const y = useTransform(scrollYProgress, [0, 1], [0, 200]);
-  const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
+const STEPS = [
+  {
+    step: "1",
+    icon: Upload,
+    title: "Chuck your files in",
+    description: "PDFs, DOCX, XLSX, TXT, or plug in Google Drive. Whatever you've got.",
+    color: "var(--candy-yellow)",
+  },
+  {
+    step: "2",
+    icon: FileText,
+    title: "Let it think",
+    description: "It reads everything, chunks it up, and builds a searchable brain out of your docs.",
+    color: "var(--candy-pink)",
+  },
+  {
+    step: "3",
+    icon: Search,
+    title: "Ask it anything",
+    description: "Plain English questions in, sourced answers out. Click a source to see exactly where it came from.",
+    color: "var(--candy-lavender)",
+  },
+];
 
+function CandyBackground() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white overflow-x-hidden">
-      <AnimatedBackground />
-      
-      {/* Navigation */}
-      <motion.nav 
-        className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10"
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
-      >
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <motion.div 
-            className="flex items-center gap-2"
-            whileHover={{ scale: 1.05 }}
-            transition={{ type: "spring", stiffness: 400 }}
-          >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
-              <Brain className="w-6 h-6 text-white" />
+    <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 candy-mesh" />
+      <div className="absolute inset-0 candy-dot-grid" />
+      <motion.div
+        className="absolute -top-40 -left-32 w-[500px] h-[500px] rounded-full opacity-40"
+        style={{ background: "radial-gradient(circle, var(--candy-yellow) 0%, transparent 70%)", filter: "blur(90px)" }}
+        animate={{ x: [0, 60, 0], y: [0, 40, 0], scale: [1, 1.15, 1] }}
+        transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute top-1/4 -right-40 w-[550px] h-[550px] rounded-full opacity-40"
+        style={{ background: "radial-gradient(circle, var(--candy-pink) 0%, transparent 70%)", filter: "blur(100px)" }}
+        animate={{ x: [0, -50, 0], y: [0, 50, 0], scale: [1, 1.1, 1] }}
+        transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+      />
+      <motion.div
+        className="absolute bottom-0 left-1/4 w-[450px] h-[450px] rounded-full opacity-30"
+        style={{ background: "radial-gradient(circle, var(--candy-cyan) 0%, transparent 70%)", filter: "blur(90px)" }}
+        animate={{ x: [0, 40, 0], y: [0, -40, 0], scale: [1, 1.2, 1] }}
+        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+      />
+      <motion.div
+        className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full opacity-30"
+        style={{ background: "radial-gradient(circle, var(--candy-lavender) 0%, transparent 70%)", filter: "blur(90px)" }}
+        animate={{ x: [0, -30, 0], y: [0, -30, 0], scale: [1, 1.1, 1] }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+      />
+    </div>
+  );
+}
+
+function StickerBadge({ children, color, className = "" }: { children: React.ReactNode; color: string; className?: string }) {
+  return (
+    <span
+      className={`sticker-sm inline-flex items-center gap-1.5 px-3 py-1.5 font-grotesk text-sm font-bold rounded-full ${className}`}
+      style={{ background: color, color: "var(--candy-ink)" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <div className="candy-theme isolate min-h-screen overflow-x-hidden font-grotesk">
+      <CandyBackground />
+      <nav className="sticky top-0 z-50 border-b-[3px] border-[var(--candy-ink)]" style={{ background: "var(--candy-bg)" }}>
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <motion.div className="flex items-center gap-2" whileHover={{ rotate: -4 }}>
+            <div className="sticker-sm w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--candy-yellow)" }}>
+              <Brain className="w-5 h-5" style={{ color: "var(--candy-ink)" }} />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
-              MindVault
-            </span>
+            <span className="font-marker text-2xl">MindVault</span>
           </motion.div>
-          
-          <div className="hidden md:flex items-center gap-8">
-            {["Features", "How it Works", "Pricing"].map((item) => (
-              <motion.a
+
+          <div className="hidden md:flex items-center gap-8 font-bold text-sm">
+            {["Features", "How it Works"].map((item) => (
+              <a
                 key={item}
-                href={`#${item.toLowerCase().replace(/\s+/g, '-')}`}
-                className="text-sm text-gray-400 hover:text-white transition-colors"
-                whileHover={{ y: -2 }}
+                href={`#${item.toLowerCase().replace(/\s+/g, "-")}`}
+                className="hover:opacity-60 transition-opacity"
               >
                 {item}
-              </motion.a>
+              </a>
             ))}
           </div>
-          
+
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <Link href="/login">
-              <motion.button
-                className="text-sm text-gray-300 hover:text-white transition-colors"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
+              <motion.button className="text-sm font-bold hover:opacity-60 transition-opacity" whileTap={{ scale: 0.95 }}>
                 Sign In
               </motion.button>
             </Link>
             <Link href="/signup">
               <motion.button
-                className="px-5 py-2.5 text-sm font-medium rounded-full bg-gradient-to-r from-violet-500 to-cyan-500 text-white shadow-lg shadow-violet-500/25"
-                whileHover={{ 
-                  scale: 1.05,
-                  boxShadow: "0 20px 40px rgba(139, 92, 246, 0.4)"
-                }}
-                whileTap={{ scale: 0.95 }}
+                className="sticker-sm px-4 py-2 text-sm font-bold rounded-full"
+                style={{ background: "var(--candy-lime)", color: "var(--candy-ink)" }}
+                whileHover={{ y: -2, rotate: -1 }}
+                whileTap={{ scale: 0.95, y: 0 }}
               >
                 Get Started
               </motion.button>
             </Link>
           </div>
         </div>
-      </motion.nav>
+      </nav>
 
-      {/* Hero Section */}
-      <section ref={heroRef} className="relative min-h-screen flex items-center justify-center pt-20">
-        <motion.div 
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ y, opacity }}
+      <section className="relative pt-20 pb-32 px-6">
+        <motion.div
+          className="absolute top-24 left-[6%] hidden lg:block bob"
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4, type: "spring" }}
         >
-          <div className="w-[800px] h-[800px] rounded-full bg-gradient-to-r from-violet-500/20 to-cyan-500/20 blur-[120px]" />
+          <StickerBadge color="var(--candy-cyan)">✦ AI-powered</StickerBadge>
         </motion.div>
-        
-        <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
+        <motion.div
+          className="absolute top-52 right-[8%] hidden lg:block bob"
+          style={{ animationDelay: "1.2s" }}
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.6, type: "spring" }}
+        >
+          <StickerBadge color="var(--candy-pink)">☆ instant answers</StickerBadge>
+        </motion.div>
+
+        <div className="relative max-w-4xl mx-auto text-center">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8"
+            transition={{ duration: 0.6 }}
+            className="inline-block mb-8"
           >
-            <Sparkles className="w-4 h-4 text-violet-400" />
-            <span className="text-sm text-gray-300">Powered by Mistral AI</span>
+            <StickerBadge color="var(--candy-yellow)">
+              <Sparkles className="w-3.5 h-3.5" />
+              Mistral, Gemini, OpenRouter, or fully local
+            </StickerBadge>
           </motion.div>
-          
+
           <motion.h1
-            className="text-5xl md:text-7xl lg:text-8xl font-bold leading-tight mb-6"
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-          >
-            Your Documents,
-            <br />
-            <GradientText className="font-extrabold">
-              Supercharged by AI
-            </GradientText>
-          </motion.h1>
-          
-          <motion.p
-            className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10"
+            className="font-marker text-5xl md:text-7xl leading-tight mb-6"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
+            transition={{ duration: 0.7, delay: 0.1 }}
           >
-            Upload any document and chat with it intelligently. MindVault uses 
-            advanced AI to understand your files and provide instant, accurate answers.
+            your documents,
+            <br />
+            <span className="inline-block -rotate-2" style={{ color: "var(--candy-pink)" }}>
+              actually
+            </span>{" "}
+            make sense now
+          </motion.h1>
+
+          <motion.p
+            className="text-lg md:text-xl font-bold max-w-xl mx-auto mb-10"
+            style={{ color: "var(--candy-ink-soft)" }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.25 }}
+          >
+            Upload your files, ask questions in plain English, get real answers with sources. No more Ctrl+F through fifty PDFs.
           </motion.p>
-          
+
           <motion.div
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.7 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
           >
             <Link href="/signup">
               <motion.button
-                className="group px-8 py-4 rounded-full bg-white text-black font-semibold flex items-center gap-2"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                className="sticker group px-8 py-4 rounded-full font-marker text-lg flex items-center gap-2"
+                style={{ background: "var(--candy-yellow)", color: "var(--candy-ink)" }}
+                whileHover={{ y: -3, rotate: -1 }}
+                whileTap={{ scale: 0.96, y: 0 }}
               >
-                Start for Free
+                open your vault
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </motion.button>
             </Link>
             <motion.button
-              className="px-8 py-4 rounded-full glass font-semibold flex items-center gap-2"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+              className="sticker px-8 py-4 rounded-full font-marker text-lg"
+              style={{ background: "var(--candy-card)", color: "var(--candy-ink)" }}
+              whileHover={{ y: -3, rotate: 1 }}
+              whileTap={{ scale: 0.96, y: 0 }}
+              onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
             >
-              Learn More
+              see how it works
             </motion.button>
           </motion.div>
-          
-          {/* Hero Stats */}
-          <motion.div
-            className="mt-20 grid grid-cols-3 gap-8 max-w-2xl mx-auto"
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.9 }}
-          >
-            {[
-              { value: "10M+", label: "Documents Processed" },
-              { value: "99.9%", label: "Accuracy Rate" },
-              { value: "50ms", label: "Response Time" },
-            ].map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
-                  {stat.value}
-                </div>
-                <div className="text-sm text-gray-500 mt-1">{stat.label}</div>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-        
-        {/* Scroll Indicator */}
-        <motion.div
-          className="absolute bottom-10 left-1/2 -translate-x-1/2"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.5 }}
-        >
-          <motion.div
-            className="w-6 h-10 rounded-full border-2 border-white/20 flex items-start justify-center p-2"
-            animate={{ y: [0, 5, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          >
-            <motion.div
-              className="w-1.5 h-3 rounded-full bg-white/60"
-              animate={{ y: [0, 12, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            />
-          </motion.div>
-        </motion.div>
-      </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-32 relative">
-        <div className="max-w-7xl mx-auto px-6">
-          <TextReveal className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              Everything You Need
-            </h2>
-            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              Powerful features that make document intelligence effortless
-            </p>
-          </TextReveal>
-          
-          <StaggerContainer className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                icon: Upload,
-                title: "Smart Upload",
-                description: "Drag and drop PDFs, Word docs, Excel files, and more. Our AI automatically processes and indexes your documents.",
-                color: "from-violet-500 to-purple-500",
-              },
-              {
-                icon: MessageSquare,
-                title: "Natural Chat",
-                description: "Ask questions in plain English. Get accurate answers with citations from your documents instantly.",
-                color: "from-cyan-500 to-blue-500",
-              },
-              {
-                icon: Brain,
-                title: "AI Powered",
-                description: "Built on Mistral AI's cutting-edge language models for deep understanding and intelligent responses.",
-                color: "from-amber-500 to-orange-500",
-              },
-              {
-                icon: Cloud,
-                title: "Google Drive",
-                description: "Connect your Google Drive and sync files automatically. Your documents, always accessible.",
-                color: "from-emerald-500 to-green-500",
-              },
-              {
-                icon: Shield,
-                title: "Enterprise Security",
-                description: "Bank-grade encryption, secure authentication, and complete data privacy for your sensitive documents.",
-                color: "from-rose-500 to-pink-500",
-              },
-              {
-                icon: Zap,
-                title: "Lightning Fast",
-                description: "Sub-second response times. Our optimized infrastructure delivers answers faster than you can type.",
-                color: "from-yellow-500 to-amber-500",
-              },
-            ].map((feature, index) => (
-              <StaggerItem key={index}>
-                <SpotlightCard className="h-full">
-                  <motion.div
-                    className="h-full p-8 rounded-2xl glass gradient-border group"
-                    whileHover={{ y: -5 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                      <feature.icon className="w-7 h-7 text-white" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-                    <p className="text-gray-400 leading-relaxed">{feature.description}</p>
-                  </motion.div>
-                </SpotlightCard>
-              </StaggerItem>
-            ))}
-          </StaggerContainer>
+          <motion.div
+            className="sticker blob-2 mt-20 mx-auto max-w-md p-6 text-left"
+            style={{ background: "var(--candy-card)" }}
+            initial={{ opacity: 0, y: 40, rotate: -2 }}
+            whileInView={{ opacity: 1, y: 0, rotate: -2 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <p className="font-bold text-sm mb-2" style={{ color: "var(--candy-ink-soft)" }}>You asked:</p>
+            <p className="font-grotesk font-bold mb-4">&ldquo;What was our Q3 revenue?&rdquo;</p>
+            <p className="font-bold text-sm mb-2" style={{ color: "var(--candy-ink-soft)" }}>MindVault answered:</p>
+            <p className="font-grotesk">Q3 revenue was $2.4M, up 18% from Q2, from page 4 of Q3_Report.pdf ✦</p>
+          </motion.div>
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section id="how-it-works" className="py-32 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-violet-500/5 to-transparent" />
-        
-        <div className="max-w-7xl mx-auto px-6 relative">
-          <TextReveal className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              How It Works
-            </h2>
-            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              Three simple steps to unlock the power of your documents
+      <section id="features" className="py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            className="text-center mb-16"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="font-marker text-4xl md:text-5xl mb-4">everything you actually need</h2>
+            <p className="font-bold text-lg" style={{ color: "var(--candy-ink-soft)" }}>
+              no bloat, just the stuff that makes document chaos manageable
             </p>
-          </TextReveal>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                step: "01",
-                icon: Upload,
-                title: "Upload Your Documents",
-                description: "Drag and drop files or connect your Google Drive. We support PDF, DOCX, XLSX, and TXT formats.",
-              },
-              {
-                step: "02",
-                icon: FileText,
-                title: "AI Processing",
-                description: "Our AI automatically extracts text, creates embeddings, and builds a searchable knowledge base.",
-              },
-              {
-                step: "03",
-                icon: Search,
-                title: "Chat & Discover",
-                description: "Ask questions in natural language. Get precise answers with citations from your documents.",
-              },
-            ].map((item, index) => (
-              <FadeIn key={index} delay={index * 0.2}>
-                <div className="relative">
-                  <div className="text-6xl font-bold text-white/5 absolute -top-6 -left-2">
-                    {item.step}
-                  </div>
-                  <div className="relative pt-8">
-                    <motion.div
-                      className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center mb-6"
-                      whileHover={{ rotate: 5, scale: 1.1 }}
-                      transition={{ type: "spring", stiffness: 400 }}
-                    >
-                      <item.icon className="w-8 h-8 text-white" />
-                    </motion.div>
-                    <h3 className="text-2xl font-semibold mb-4">{item.title}</h3>
-                    <p className="text-gray-400 leading-relaxed">{item.description}</p>
-                  </div>
-                  {index < 2 && (
-                    <div className="hidden md:block absolute top-1/2 -right-4 w-8 h-px bg-gradient-to-r from-violet-500/50 to-transparent" />
-                  )}
+          </motion.div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {FEATURES.map((feature, index) => (
+              <motion.div
+                key={feature.title}
+                className={`sticker ${feature.blob} p-7`}
+                style={{ background: "var(--candy-card)", rotate: `${feature.rotate}deg` }}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ duration: 0.4, delay: (index % 3) * 0.1 }}
+                whileHover={{ y: -6, rotate: 0 }}
+              >
+                <div
+                  className="sticker-sm w-14 h-14 rounded-2xl flex items-center justify-center mb-5"
+                  style={{ background: feature.color }}
+                >
+                  <feature.icon className="w-7 h-7" style={{ color: "var(--candy-ink)" }} />
                 </div>
-              </FadeIn>
+                <h3 className="font-marker text-xl mb-2">{feature.title}</h3>
+                <p className="font-grotesk font-medium leading-relaxed" style={{ color: "var(--candy-ink-soft)" }}>
+                  {feature.description}
+                </p>
+              </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-32 relative">
-        <div className="max-w-5xl mx-auto px-6">
+      <section id="how-it-works" className="py-24 px-6">
+        <div className="max-w-5xl mx-auto">
           <motion.div
-            className="relative rounded-3xl overflow-hidden"
-            initial={{ opacity: 0, y: 50 }}
+            className="text-center mb-16"
+            initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
           >
-            {/* Background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-600/20 to-cyan-600/20" />
-            <div className="absolute inset-0 glass-strong" />
-            
-            {/* Floating Elements */}
-            <FloatingElement className="absolute top-10 right-10 opacity-50" delay={0}>
-              <div className="w-20 h-20 rounded-full bg-violet-500/30 blur-xl" />
-            </FloatingElement>
-            <FloatingElement className="absolute bottom-10 left-10 opacity-50" delay={2}>
-              <div className="w-32 h-32 rounded-full bg-cyan-500/30 blur-xl" />
-            </FloatingElement>
-            
-            {/* Content */}
-            <div className="relative z-10 px-8 py-20 md:px-16 text-center">
+            <h2 className="font-marker text-4xl md:text-5xl mb-4">how it works</h2>
+            <p className="font-bold text-lg" style={{ color: "var(--candy-ink-soft)" }}>three steps, zero headaches</p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-10">
+            {STEPS.map((item, index) => (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                key={item.step}
+                initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: 0.2 }}
+                transition={{ duration: 0.5, delay: index * 0.15 }}
+                className="text-center"
               >
-                <h2 className="text-4xl md:text-5xl font-bold mb-6">
-                  Ready to Transform Your
-                  <br />
-                  <GradientText>Document Workflow?</GradientText>
-                </h2>
-                <p className="text-gray-400 text-lg mb-10 max-w-2xl mx-auto">
-                  Join thousands of users who are already using MindVault to unlock 
-                  the knowledge hidden in their documents.
+                <motion.div
+                  className="sticker w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 font-marker text-3xl"
+                  style={{ background: item.color, color: "var(--candy-ink)" }}
+                  whileHover={{ rotate: 8, scale: 1.08 }}
+                >
+                  {item.step}
+                </motion.div>
+                <h3 className="font-marker text-2xl mb-3">{item.title}</h3>
+                <p className="font-grotesk font-medium leading-relaxed" style={{ color: "var(--candy-ink-soft)" }}>
+                  {item.description}
                 </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                  <Link href="/signup">
-                    <motion.button
-                      className="px-8 py-4 rounded-full bg-white text-black font-semibold flex items-center gap-2"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      Get Started Free
-                      <ArrowRight className="w-5 h-5" />
-                    </motion.button>
-                  </Link>
-                  <motion.button
-                    className="px-8 py-4 rounded-full glass font-semibold"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    View Demo
-                  </motion.button>
-                </div>
               </motion.div>
-            </div>
-          </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-12 border-t border-white/10">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
-                <Brain className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-lg font-bold">MindVault</span>
+      <section className="py-24 px-6">
+        <motion.div
+          className="sticker blob-3 max-w-4xl mx-auto px-8 py-16 md:px-16 text-center"
+          style={{ background: "var(--candy-lavender)" }}
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          <h2 className="font-marker text-4xl md:text-5xl mb-6" style={{ color: "var(--candy-ink)" }}>
+            stop losing your documents
+            <br />
+            in the void
+          </h2>
+          <p className="font-bold text-lg mb-10 max-w-xl mx-auto" style={{ color: "var(--candy-ink)" }}>
+            it&apos;s free to start, takes two minutes, and your files are actually searchable by the end of it
+          </p>
+          <Link href="/signup">
+            <motion.button
+              className="sticker px-8 py-4 rounded-full font-marker text-lg inline-flex items-center gap-2"
+              style={{ background: "var(--candy-yellow)", color: "var(--candy-ink)" }}
+              whileHover={{ y: -3, rotate: -1 }}
+              whileTap={{ scale: 0.96, y: 0 }}
+            >
+              let&apos;s go
+              <ArrowRight className="w-5 h-5" />
+            </motion.button>
+          </Link>
+        </motion.div>
+      </section>
+
+      <footer className="py-12 px-6 border-t-[3px]" style={{ borderColor: "var(--candy-ink)" }}>
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2">
+            <div className="sticker-sm w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "var(--candy-yellow)" }}>
+              <Brain className="w-4 h-4" style={{ color: "var(--candy-ink)" }} />
             </div>
-            <p className="text-gray-500 text-sm">
-              © 2024 MindVault. All rights reserved.
-            </p>
-            <div className="flex items-center gap-6">
-              {["Privacy", "Terms", "Contact"].map((link) => (
-                <a
-                  key={link}
-                  href="#"
-                  className="text-sm text-gray-400 hover:text-white transition-colors"
-                >
-                  {link}
-                </a>
-              ))}
-            </div>
+            <span className="font-marker text-lg">MindVault</span>
+          </div>
+          <p className="font-bold text-sm" style={{ color: "var(--candy-ink-soft)" }}>© 2026 MindVault. Built different.</p>
+          <div className="flex items-center gap-6 font-bold text-sm">
+            {["Privacy", "Terms", "Contact"].map((link) => (
+              <a key={link} href="#" className="hover:opacity-60 transition-opacity">
+                {link}
+              </a>
+            ))}
           </div>
         </div>
       </footer>

@@ -4,8 +4,7 @@ from app.models.user import User, Workspace, WorkspaceMember
 ROLE_RANK = {"viewer": 0, "editor": 1, "owner": 2}
 
 def link_pending_invites(db: Session, user: User):
-    # a workspace owner can invite someone before they ever sign up; once that
-    # email creates an account, attach it to any invites waiting for it
+    # links any invites waiting for this email now that they have an account
     pending = db.query(WorkspaceMember).filter(
         WorkspaceMember.invited_email == user.email,
         WorkspaceMember.user_id.is_(None)
@@ -24,11 +23,10 @@ def get_membership(db: Session, workspace_id: int, user_id: int) -> WorkspaceMem
     ).first()
 
 def get_active_workspace_id(db: Session, user: User) -> int | None:
-    """Returns the workspace the user is currently working in, or None for their personal space."""
     if not user.current_workspace_id:
         return None
     if not get_membership(db, user.current_workspace_id, user.id):
-        return None  # stale pointer (removed from workspace) - fall back to personal
+        return None
     return user.current_workspace_id
 
 def require_role(db: Session, workspace_id: int, user: User, min_role: str) -> WorkspaceMember:

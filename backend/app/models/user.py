@@ -51,7 +51,7 @@ class File(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)  # null = personal file, not shared
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)  # null means a personal file
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     file_type = Column(String, nullable=False)
@@ -62,7 +62,6 @@ class File(Base):
     external_id = Column(String, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
-    # background ingestion progress - pending until queued, then processing/complete/error
     processing_status = Column(String, default="complete")
     processing_progress = Column(Integer, default=0)
     processing_total = Column(Integer, default=0)
@@ -119,67 +118,61 @@ class Citation(Base):
     chat = relationship("ChatHistory", back_populates="citations")
 
 class QueryCache(Base):
-    """Cache for query results to reduce LLM costs and improve response time"""
     __tablename__ = "query_cache"
 
     id = Column(Integer, primary_key=True, index=True)
-    query_hash = Column(String(64), unique=True, index=True, nullable=False)  # SHA-256 hash of normalized question
-    question = Column(Text, nullable=False)  # Original question text
+    query_hash = Column(String(64), unique=True, index=True, nullable=False)
+    question = Column(Text, nullable=False)
     answer = Column(Text, nullable=False)
-    sources = Column(Text, nullable=True)  # JSON string of sources
-    hit_count = Column(Integer, default=1)  # Number of times this cache entry was used
+    sources = Column(Text, nullable=True)
+    hit_count = Column(Integer, default=1)
     last_accessed = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=True)  # Optional expiration
+    expires_at = Column(DateTime, nullable=True)
 
 class SyncedFile(Base):
-    """Track synced files from external sources (Google Drive, etc.)"""
     __tablename__ = "synced_files"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    external_id = Column(String, nullable=False)  # Google Drive file ID, etc.
-    source = Column(String, nullable=False)  # 'google_drive', 'dropbox', etc.
+    external_id = Column(String, nullable=False)
+    source = Column(String, nullable=False)
     filename = Column(String, nullable=False)
     mime_type = Column(String, nullable=True)
-    size = Column(Integer, nullable=True)  # File size in bytes
-    checksum = Column(String, nullable=True)  # MD5 or SHA hash for change detection
-    last_modified = Column(DateTime, nullable=True)  # Last modified time from source
-    local_file_id = Column(Integer, ForeignKey("files.id"), nullable=True)  # Reference to local File
-    sync_status = Column(String, default="active")  # active, error, deleted
+    size = Column(Integer, nullable=True)
+    checksum = Column(String, nullable=True)
+    last_modified = Column(DateTime, nullable=True)
+    local_file_id = Column(Integer, ForeignKey("files.id"), nullable=True)
+    sync_status = Column(String, default="active")
     last_synced = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Unique constraint: one external file per user per source
-    # This is enforced at the database level
-    # Can be added via Alembic migration: UniqueConstraint('user_id', 'external_id', 'source', name='uix_synced_file')"
+
+    # one external file per user per source, not yet enforced at the database level
 
 class CostTracking(Base):
-    """Track LLM API usage and costs per user"""
     __tablename__ = "cost_tracking"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    provider = Column(String, nullable=False)  # 'mistral', 'ollama', etc.
-    operation = Column(String, nullable=False)  # 'chat', 'embedding', 'token_usage'
+    provider = Column(String, nullable=False)
+    operation = Column(String, nullable=False)
     input_tokens = Column(Integer, default=0)
     output_tokens = Column(Integer, default=0)
     total_tokens = Column(Integer, default=0)
-    cost_usd = Column(Numeric(10, 6), default=0.0)  # Cost in USD with 6 decimal places
+    cost_usd = Column(Numeric(10, 6), default=0.0)
     request_count = Column(Integer, default=1)
-    extra_data = Column(Text, nullable=True)  # JSON string for additional data
+    extra_data = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     user = relationship("User", backref="cost_tracking")
 
 class BudgetSetting(Base):
-    """User budget settings and alerts"""
     __tablename__ = "budget_settings"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
-    monthly_budget = Column(Numeric(10, 2), default=50.00)  # Monthly budget in USD
-    alert_threshold = Column(Numeric(5, 2), default=0.80)  # Alert at 80% of budget
+    monthly_budget = Column(Numeric(10, 2), default=50.00)
+    alert_threshold = Column(Numeric(5, 2), default=0.80)
     alert_email = Column(String, nullable=True)
     last_alert_sent = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

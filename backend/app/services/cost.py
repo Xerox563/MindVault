@@ -1,7 +1,3 @@
-"""
-Cost Tracking Service
-Monitor LLM API usage and costs
-"""
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
@@ -11,21 +7,19 @@ from app.models.user import CostTracking, BudgetSetting
 from app.utils.logger import log_info, log_error
 from app.services.user_settings import base_provider
 
-# Provider pricing (per 1K tokens)
-# Updated regularly as prices change
 PROVIDER_PRICING = {
     "mistral": {
         "chat": {
-            "input": Decimal("0.0001"),   # $0.10 per 1M tokens = $0.0001 per 1K
-            "output": Decimal("0.0003"),  # $0.30 per 1M tokens
+            "input": Decimal("0.0001"),
+            "output": Decimal("0.0003"),
         },
         "embedding": {
-            "input": Decimal("0.00002"),  # $0.02 per 1M tokens
+            "input": Decimal("0.00002"),
         }
     },
     "ollama": {
         "chat": {
-            "input": Decimal("0"),  # Free (local)
+            "input": Decimal("0"),
             "output": Decimal("0"),
         },
         "embedding": {
@@ -33,50 +27,35 @@ PROVIDER_PRICING = {
         }
     },
     "gemini": {
-        # Rough blended rate (Gemini 1.5 Flash tier). Gemini's actual per-model
-        # pricing varies a lot between Flash/Pro tiers - this is a placeholder,
-        # not exact, until per-model rates are tracked individually.
+        # placeholder rate, Gemini pricing varies a lot by model tier
         "chat": {
-            "input": Decimal("0.000075"),  # $0.075 per 1M tokens
-            "output": Decimal("0.0003"),   # $0.30 per 1M tokens
+            "input": Decimal("0.000075"),
+            "output": Decimal("0.0003"),
         },
         "embedding": {
             "input": Decimal("0.00001"),
         }
     },
-    # OpenRouter routes to dozens of different underlying models with wildly
-    # different prices (free open models up to premium frontier models), so no
-    # single per-1K rate is meaningful here - falls through to the generic
-    # default below rather than pretending to be precise.
+    # openrouter has no fixed rate across its many underlying models, uses the default fallback below
 }
 
 def calculate_cost(provider: str, operation: str, input_tokens: int, output_tokens: int = 0) -> Decimal:
-    """Calculate cost based on provider and token usage.
-
-    `provider` may be a specific model id (e.g. "ollama-llama3:8b"); it's
-    collapsed to its base provider ("ollama") before the pricing lookup so
-    per-model ids don't miss the table and fall through to paid defaults.
-    """
     try:
         pricing = PROVIDER_PRICING.get(base_provider(provider.lower()), {})
-        
+
         if operation == "embedding":
-            # Embeddings only have input tokens. Unknown providers (e.g. OpenRouter,
-            # which has no fixed rate) get a small non-zero default rather than a
-            # silent $0, so unpriced usage is still visible as *some* cost.
             input_price = pricing.get("embedding", {}).get("input", Decimal("0.0001"))
             cost = (Decimal(input_tokens) / 1000) * input_price
         else:
-            # Chat has both input and output
             input_price = pricing.get("chat", {}).get("input", Decimal("0.001"))
             output_price = pricing.get("chat", {}).get("output", Decimal("0.003"))
-            
+
             input_cost = (Decimal(input_tokens) / 1000) * input_price
             output_cost = (Decimal(output_tokens) / 1000) * output_price
             cost = input_cost + output_cost
-        
+
         return round(cost, 6)
-        
+
     except Exception as e:
         log_error(f"Error calculating cost: {str(e)}")
         return Decimal("0")
@@ -90,11 +69,10 @@ def track_cost(
     output_tokens: int = 0,
     metadata: Optional[Dict[str, Any]] = None
 ) -> CostTracking:
-    """Track a single API call cost"""
     try:
         total_tokens = input_tokens + output_tokens
         cost = calculate_cost(provider, operation, input_tokens, output_tokens)
-        
+
         tracking = CostTracking(
             user_id=user_id,
             provider=provider.lower(),
@@ -106,43 +84,37 @@ def track_cost(
             extra_data=str(metadata) if metadata else None,
             created_at=datetime.utcnow()
         )
-        
+
         db.add(tracking)
         db.commit()
-        
+
         log_info(f"Tracked cost for user {user_id}: {provider}/{operation} = ${cost} ({total_tokens} tokens)")
-        
-        # Check if budget alert needed
+
         check_budget_alert(db, user_id)
-        
+
         return tracking
-        
+
     except Exception as e:
         log_error(f"Error tracking cost: {str(e)}")
         db.rollback()
         raise
 
 def get_user_cost_stats(db: Session, user_id: int, days: int = 30) -> Dict[str, Any]:
-    """Get cost statistics for a user over the last N days"""
     try:
         since = datetime.utcnow() - timedelta(days=days)
-        
-        # Total cost
+
         total_cost = db.query(func.sum(CostTracking.cost_usd)).filter(
             and_(CostTracking.user_id == user_id, CostTracking.created_at >= since)
         ).scalar() or Decimal("0")
-        
-        # Total tokens
+
         total_tokens = db.query(func.sum(CostTracking.total_tokens)).filter(
             and_(CostTracking.user_id == user_id, CostTracking.created_at >= since)
         ).scalar() or 0
-        
-        # Total requests
+
         total_requests = db.query(func.count(CostTracking.id)).filter(
             and_(CostTracking.user_id == user_id, CostTracking.created_at >= since)
         ).scalar() or 0
-        
-        # Cost by provider
+
         by_provider = db.query(
             CostTracking.provider,
             func.sum(CostTracking.cost_usd).label("cost"),
@@ -151,8 +123,7 @@ def get_user_cost_stats(db: Session, user_id: int, days: int = 30) -> Dict[str, 
         ).filter(
             and_(CostTracking.user_id == user_id, CostTracking.created_at >= since)
         ).group_by(CostTracking.provider).all()
-        
-        # Cost by operation
+
         by_operation = db.query(
             CostTracking.operation,
             func.sum(CostTracking.cost_usd).label("cost"),
@@ -160,8 +131,7 @@ def get_user_cost_stats(db: Session, user_id: int, days: int = 30) -> Dict[str, 
         ).filter(
             and_(CostTracking.user_id == user_id, CostTracking.created_at >= since)
         ).group_by(CostTracking.operation).all()
-        
-        # Daily breakdown
+
         daily = db.query(
             func.date(CostTracking.created_at).label("date"),
             func.sum(CostTracking.cost_usd).label("cost"),
@@ -169,8 +139,7 @@ def get_user_cost_stats(db: Session, user_id: int, days: int = 30) -> Dict[str, 
         ).filter(
             and_(CostTracking.user_id == user_id, CostTracking.created_at >= since)
         ).group_by(func.date(CostTracking.created_at)).order_by("date").all()
-        
-        # Today's cost
+
         today = datetime.utcnow().date()
         today_cost = db.query(func.sum(CostTracking.cost_usd)).filter(
             and_(
@@ -178,8 +147,7 @@ def get_user_cost_stats(db: Session, user_id: int, days: int = 30) -> Dict[str, 
                 func.date(CostTracking.created_at) == today
             )
         ).scalar() or Decimal("0")
-        
-        # This month's cost
+
         current_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         month_cost = db.query(func.sum(CostTracking.cost_usd)).filter(
             and_(
@@ -187,7 +155,7 @@ def get_user_cost_stats(db: Session, user_id: int, days: int = 30) -> Dict[str, 
                 CostTracking.created_at >= current_month
             )
         ).scalar() or Decimal("0")
-        
+
         return {
             "total_cost": float(total_cost),
             "total_tokens": int(total_tokens),
@@ -221,15 +189,14 @@ def get_user_cost_stats(db: Session, user_id: int, days: int = 30) -> Dict[str, 
             ],
             "period_days": days
         }
-        
+
     except Exception as e:
         log_error(f"Error getting cost stats: {str(e)}")
         return {}
 
 def get_or_create_budget(db: Session, user_id: int) -> BudgetSetting:
-    """Get or create budget settings for a user"""
     budget = db.query(BudgetSetting).filter(BudgetSetting.user_id == user_id).first()
-    
+
     if not budget:
         budget = BudgetSetting(
             user_id=user_id,
@@ -239,7 +206,7 @@ def get_or_create_budget(db: Session, user_id: int) -> BudgetSetting:
         db.add(budget)
         db.commit()
         db.refresh(budget)
-    
+
     return budget
 
 def update_budget(
@@ -249,30 +216,27 @@ def update_budget(
     alert_threshold: Optional[float] = None,
     alert_email: Optional[str] = None
 ) -> BudgetSetting:
-    """Update budget settings"""
     budget = get_or_create_budget(db, user_id)
-    
+
     if monthly_budget is not None:
         budget.monthly_budget = Decimal(str(monthly_budget))
-    
+
     if alert_threshold is not None:
         budget.alert_threshold = Decimal(str(alert_threshold))
-    
+
     if alert_email is not None:
         budget.alert_email = alert_email
-    
+
     budget.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(budget)
-    
+
     return budget
 
 def check_budget_alert(db: Session, user_id: int) -> Optional[Dict[str, Any]]:
-    """Check if user is approaching budget limit and should be alerted"""
     try:
         budget = get_or_create_budget(db, user_id)
-        
-        # Get current month's cost
+
         current_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         month_cost = db.query(func.sum(CostTracking.cost_usd)).filter(
             and_(
@@ -280,23 +244,20 @@ def check_budget_alert(db: Session, user_id: int) -> Optional[Dict[str, Any]]:
                 CostTracking.created_at >= current_month
             )
         ).scalar() or Decimal("0")
-        
-        # Calculate percentage
+
         if budget.monthly_budget > 0:
             percentage = float(month_cost) / float(budget.monthly_budget)
         else:
             percentage = 0
-        
-        # Check if alert should be sent
+
         threshold = float(budget.alert_threshold)
         should_alert = percentage >= threshold
-        
-        # Check if we already sent alert recently (within 24 hours)
+
         if should_alert and budget.last_alert_sent:
             hours_since_alert = (datetime.utcnow() - budget.last_alert_sent).total_seconds() / 3600
             if hours_since_alert < 24:
                 should_alert = False
-        
+
         alert_info = {
             "should_alert": should_alert,
             "monthly_budget": float(budget.monthly_budget),
@@ -304,9 +265,8 @@ def check_budget_alert(db: Session, user_id: int) -> Optional[Dict[str, Any]]:
             "percentage": round(percentage * 100, 2),
             "threshold_percentage": float(threshold * 100)
         }
-        
+
         if should_alert:
-            # Update last alert sent
             budget.last_alert_sent = datetime.utcnow()
             db.commit()
 
@@ -315,34 +275,29 @@ def check_budget_alert(db: Session, user_id: int) -> Optional[Dict[str, Any]]:
             if budget.alert_email:
                 from app.services.email import send_budget_alert_email
                 send_budget_alert_email(budget.alert_email, alert_info["percentage"], alert_info["current_cost"], alert_info["monthly_budget"])
-        
+
         return alert_info
-        
+
     except Exception as e:
         log_error(f"Error checking budget alert: {str(e)}")
         return None
 
 def get_global_cost_stats(db: Session, days: int = 30) -> Dict[str, Any]:
-    """Get global cost statistics across all users"""
     try:
         since = datetime.utcnow() - timedelta(days=days)
-        
-        # Total platform cost
+
         total_cost = db.query(func.sum(CostTracking.cost_usd)).filter(
             CostTracking.created_at >= since
         ).scalar() or Decimal("0")
-        
-        # Total tokens
+
         total_tokens = db.query(func.sum(CostTracking.total_tokens)).filter(
             CostTracking.created_at >= since
         ).scalar() or 0
-        
-        # Total requests
+
         total_requests = db.query(func.count(CostTracking.id)).filter(
             CostTracking.created_at >= since
         ).scalar() or 0
-        
-        # Top users by cost
+
         top_users = db.query(
             CostTracking.user_id,
             func.sum(CostTracking.cost_usd).label("cost"),
@@ -350,7 +305,7 @@ def get_global_cost_stats(db: Session, days: int = 30) -> Dict[str, Any]:
         ).filter(
             CostTracking.created_at >= since
         ).group_by(CostTracking.user_id).order_by(func.sum(CostTracking.cost_usd).desc()).limit(10).all()
-        
+
         return {
             "total_cost": float(total_cost),
             "total_tokens": int(total_tokens),
@@ -364,7 +319,7 @@ def get_global_cost_stats(db: Session, days: int = 30) -> Dict[str, Any]:
                 for u in top_users
             ]
         }
-        
+
     except Exception as e:
         log_error(f"Error getting global stats: {str(e)}")
         return {}

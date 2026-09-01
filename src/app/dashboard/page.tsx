@@ -860,7 +860,6 @@ export default function Dashboard() {
         </header>
 
         <main className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Ambient depth glow behind the chat surface */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden -z-0">
             <motion.div
               className="absolute top-[-10%] left-1/3 w-[420px] h-[420px] rounded-full opacity-[0.08]"

@@ -5,7 +5,6 @@ from app.utils.crypto import encrypt_value, decrypt_value
 from app.utils.logger import log_error
 
 def get_user_api_keys(user: User) -> dict[str, str]:
-    """Decrypt and return {provider: api_key} for this user. Never raises on bad data."""
     if not user.api_keys_encrypted:
         return {}
     try:
@@ -39,9 +38,7 @@ def delete_user_api_key(db: Session, user: User, provider: str) -> None:
 PROVIDER_PREFIXES = ("ollama", "mistral", "gemini", "openrouter")
 
 def base_provider(provider_id: str) -> str:
-    """Collapse a specific-model id like 'gemini-gemini-1.5-flash' or 'ollama-llama3.2'
-    down to its provider family ('gemini', 'ollama') so API keys/pricing lookups work
-    regardless of which model under that provider was picked."""
+    # collapses a model id like gemini-gemini-1.5-flash down to just gemini
     for prefix in PROVIDER_PREFIXES:
         if provider_id == prefix or provider_id.startswith(prefix + "-"):
             return prefix

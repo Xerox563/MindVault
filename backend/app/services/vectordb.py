@@ -8,11 +8,7 @@ os.makedirs(CHROMA_DIR, exist_ok=True)
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))
 
-# Chroma collections are fixed to one embedding dimensionality, but different
-# embedding providers produce different dimensions (Mistral 1024, Gemini 3072, ...),
-# so each dimension gets its own collection. 1024 keeps the original "mindvault" name
-# so existing embeddings (all Mistral, from before multi-provider support) still work
-# without a data migration.
+# each embedding dimension gets its own chroma collection since chroma needs one fixed size per collection
 _LEGACY_DIM = 1024
 _LEGACY_NAME = "mindvault"
 _collections: dict[int, "chromadb.Collection"] = {}
@@ -33,15 +29,6 @@ def add_embedding(chunk_id: int, text: str, embedding: list[float], metadata: di
     )
 
 def search_similar(query_embedding: list[float], user_id: int, n_results: int = 5, workspace_id: int | None = None) -> list[dict]:
-    """Returns nearest chunks with their L2 distance so callers can drop irrelevant
-    matches (Chroma's default n_results are always returned even when nothing
-    is actually relevant, e.g. small talk against a document collection).
-
-    Scoped to a workspace's shared files when workspace_id is given, otherwise to
-    the user's own personal (non-workspace) files. Only searches the collection
-    matching the query embedding's own dimension - chunks embedded with a
-    different-dimension model (e.g. after switching embedding providers) won't
-    show up until re-embedded with the current one."""
     collection = _collection_for_dim(len(query_embedding))
     where = {"workspace_id": workspace_id} if workspace_id else {"$and": [{"user_id": user_id}, {"workspace_id": 0}]}
     results = collection.query(
@@ -58,8 +45,7 @@ def search_similar(query_embedding: list[float], user_id: int, n_results: int = 
     ]
 
 def delete_embedding(chunk_id: int):
-    # dimension isn't tracked per chunk, so check every collection that exists on
-    # disk rather than only ones this process has already touched
+    # dimension is not tracked per chunk, so check every collection that exists
     for collection in chroma_client.list_collections():
         try:
             collection.delete(ids=[str(chunk_id)])

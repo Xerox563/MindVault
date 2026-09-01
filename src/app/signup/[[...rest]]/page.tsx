@@ -10,7 +10,6 @@ export default function SignUpPage({ params }: { params: { rest?: string[] } }) 
     <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center relative overflow-hidden">
       <AnimatedBackground />
       
-      {/* Floating Decorative Elements */}
       <motion.div
         className="absolute top-20 right-20 w-64 h-64 rounded-full opacity-20"
         style={{
@@ -40,7 +39,6 @@ export default function SignUpPage({ params }: { params: { rest?: string[] } }) 
       
       <div className="relative z-10 w-full max-w-md px-6 py-10">
         <FadeIn>
-          {/* Logo */}
           <motion.div 
             className="flex items-center justify-center gap-3 mb-8"
             initial={{ scale: 0.8, opacity: 0 }}
@@ -55,7 +53,6 @@ export default function SignUpPage({ params }: { params: { rest?: string[] } }) 
             </span>
           </motion.div>
           
-          {/* Clerk Sign Up */}
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}

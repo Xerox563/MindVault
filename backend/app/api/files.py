@@ -61,8 +61,7 @@ async def upload_file(
     db.commit()
     db.refresh(file_record)
 
-    # text extraction is fast (local parsing); chunking+embedding is the slow part
-    # that can take a while on a big file, so that's what actually goes to the queue
+    # extraction is fast, chunking and embedding is the slow part that goes to the queue
     text = extract_text(file_path, file_ext)
     if text:
         file_record.extracted_text = text

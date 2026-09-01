@@ -5,8 +5,7 @@ from app.utils.logger import log_info, log_error
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    """Send a transactional email via Brevo. Never raises - email is a nice-to-have,
-    not something that should break the request that triggered it."""
+    # never raises, a failed email should not break the request that triggered it
     if not settings.BREVO_API_KEY:
         log_info(f"Skipping email to {to_email} ({subject}): no BREVO_API_KEY configured")
         return False

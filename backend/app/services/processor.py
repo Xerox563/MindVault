@@ -8,10 +8,6 @@ from app.services.vectordb import add_embedding
 from app.utils.logger import log_error
 
 def process_file(db: Session, file: File, on_progress: Optional[Callable[[int, int], None]] = None):
-    """Chunks, embeds, and stores a file's extracted text. If on_progress is given, it's
-    called as (chunks_done, chunks_total) after each chunk - the background ingestion
-    worker uses this to update progress; synchronous callers (Drive/Sheets/Slack/Notion
-    sync) just don't pass one."""
     if not file.extracted_text:
         return
 

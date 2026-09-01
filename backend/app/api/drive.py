@@ -36,12 +36,7 @@ def get_flow():
 
 @router.get("/auth/google/connect")
 def connect_google(current_user: User = Depends(get_current_user)):
-    """Return a Google OAuth URL for the frontend to open in a popup.
-
-    Auth is handled the normal way (Authorization header via get_current_user);
-    the user id travels through the OAuth `state` param since the popup's
-    redirect back to /callback carries no auth header of its own.
-    """
+    # user id travels through the OAuth state param since the popup callback carries no auth header
     import json
     import base64
     state = base64.urlsafe_b64encode(json.dumps({"user_id": current_user.id}).encode()).decode()
@@ -56,12 +51,10 @@ def connect_google(current_user: User = Depends(get_current_user)):
 
 @router.get("/auth/google/callback")
 def google_callback(request: Request, code: str, state: str = None, db: Session = Depends(get_db)):
-    """Google OAuth callback - handles popup flow with state parameter"""
     flow = get_flow()
     flow.fetch_token(code=code)
     creds = flow.credentials
-    
-    # Get user from state parameter
+
     if state:
         import json
         import base64
@@ -75,8 +68,7 @@ def google_callback(request: Request, code: str, state: str = None, db: Session 
                 db.commit()
         except Exception as e:
             print(f"Error decoding state: {e}")
-    
-    # Return a page that closes the popup
+
     html_content = """
     <!DOCTYPE html>
     <html>
@@ -97,48 +89,39 @@ def google_callback(request: Request, code: str, state: str = None, db: Session 
 
 @router.get("/drive/files")
 def drive_files(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """List Google Drive files using stored OAuth tokens with sync status"""
     from app.services.drive import get_drive_service
-    
-    # Check if user has connected Google Drive
+
     if not current_user.google_refresh_token:
         raise HTTPException(400, "Google Drive not connected. Please connect your Google Drive using the Connect button.")
-    
-    # Get Google Drive service using stored tokens
+
     drive_service = get_drive_service({
         "token": current_user.google_token,
         "refresh_token": current_user.google_refresh_token
     })
-    
+
     try:
-        # List files from Google Drive
         results = drive_service.files().list(
             pageSize=50,
             fields="files(id, name, mimeType, size, modifiedTime, md5Checksum)"
         ).execute()
         files = results.get('files', [])
-        
-        # Get existing sync records for this user
+
         synced_files = {sf.external_id: sf for sf in get_synced_files_for_user(db, current_user.id, source="google_drive")}
-        
-        # Enrich file list with sync status
+
         enriched_files = []
         for file in files:
             file_id = file.get('id')
             synced = synced_files.get(file_id)
-            
-            # Parse modified time
+
             modified_time_str = file.get('modifiedTime')
             if modified_time_str:
                 from dateutil import parser
                 remote_modified = parser.parse(modified_time_str)
             else:
                 remote_modified = None
-            
-            # Check if needs sync
+
             needs_sync_flag = False
             if synced and synced.sync_status == "active":
-                # Check if file changed
                 remote_size = file.get('size')
                 remote_checksum = file.get('md5Checksum')
                 
@@ -166,80 +149,69 @@ def drive_files(db: Session = Depends(get_db), current_user: User = Depends(get_
         raise HTTPException(500, f"Failed to list Google Drive files: {str(e)}")
 
 @router.post("/sync/drive/{file_id}")
-@limiter.limit("20/minute")  # Rate limit: 20 sync operations per minute
+@limiter.limit("20/minute")
 def sync_drive_file(request: Request, file_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Sync a file from Google Drive using stored OAuth tokens with incremental sync"""
     from app.services.drive import get_drive_service
     from dateutil import parser
-    
-    # Check if user has connected Google Drive
+
     if not current_user.google_refresh_token:
         raise HTTPException(400, "Google Drive not connected. Please connect your Google Drive first.")
-    
-    # Get Google Drive service using stored tokens
+
     drive_service = get_drive_service({
         "token": current_user.google_token,
         "refresh_token": current_user.google_refresh_token
     })
-    
+
     try:
-        # Get file metadata with all fields
         file_meta = drive_service.files().get(
             fileId=file_id,
             fields="id, name, mimeType, size, modifiedTime, md5Checksum"
         ).execute()
-        
+
         file_name = file_meta.get("name", "unknown")
         mime_type = file_meta.get("mimeType", "")
         file_size = int(file_meta.get("size", 0)) if file_meta.get("size") else None
         checksum = file_meta.get("md5Checksum")
-        
-        # Parse modified time
+
         modified_time_str = file_meta.get("modifiedTime")
         modified_time = parser.parse(modified_time_str) if modified_time_str else None
-        
-        # Check if file needs syncing (incremental sync)
+
         synced_file = get_synced_file(db, current_user.id, file_id, "google_drive")
-        
+
         if synced_file and synced_file.sync_status == "active" and not needs_sync(
             db, current_user.id, file_id, "google_drive",
             remote_modified=modified_time,
             remote_size=file_size,
             remote_checksum=checksum
         ):
-            # File unchanged, return cached info
             return {
                 "message": "File already synced and up to date",
                 "file_id": synced_file.local_file_id,
                 "from_cache": True,
                 "last_synced": synced_file.last_synced.isoformat() if synced_file.last_synced else None
             }
-        
-        # Download file content
+
         content = drive_service.files().get_media(fileId=file_id).execute()
-        
+
         if not content:
             raise HTTPException(400, "Failed to download file")
-        
-        # Save file locally
+
         user_dir = os.path.join(settings.UPLOAD_DIR, str(current_user.id))
         os.makedirs(user_dir, exist_ok=True)
-        
+
         file_path = os.path.join(user_dir, file_name)
         with open(file_path, "wb") as f:
             f.write(content)
-        
-        # Create or update file record
+
         file_ext = os.path.splitext(file_name)[1].lower()
-        
+
         if synced_file and synced_file.local_file_id:
-            # Update existing file
             file_record = db.query(FileModel).filter(FileModel.id == synced_file.local_file_id).first()
             if file_record:
                 file_record.file_size = len(content)
-                file_record.extracted_text = None  # Will be re-extracted
+                file_record.extracted_text = None
             else:
-                # File was deleted locally, create new
+                # local file was deleted, recreate it
                 file_record = FileModel(
                     user_id=current_user.id,
                     filename=file_name,
@@ -250,7 +222,6 @@ def sync_drive_file(request: Request, file_id: str, db: Session = Depends(get_db
                 )
                 db.add(file_record)
         else:
-            # Create new file record
             file_record = FileModel(
                 user_id=current_user.id,
                 filename=file_name,
@@ -260,11 +231,10 @@ def sync_drive_file(request: Request, file_id: str, db: Session = Depends(get_db
                 source="drive"
             )
             db.add(file_record)
-        
+
         db.commit()
         db.refresh(file_record)
-        
-        # Record the sync
+
         record_sync(
             db=db,
             user_id=current_user.id,
@@ -278,8 +248,7 @@ def sync_drive_file(request: Request, file_id: str, db: Session = Depends(get_db
             local_file_id=file_record.id,
             status="active"
         )
-        
-        # Extract text and process
+
         text = extract_text(file_path, file_ext)
         if text:
             file_record.extracted_text = text

@@ -15,22 +15,17 @@ security = HTTPBearer(auto_error=False)
 CLERK_API_URL = "https://api.clerk.com/v1"
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
-# Clerk verification hits their API twice per call (session + user lookup); every
-# request through get_current_user pays that latency. Cache verified tokens for a
-# short TTL instead of re-verifying on every single request.
+# caches verified tokens briefly since clerk verification is two API calls per request
 _CLERK_TOKEN_CACHE_TTL_SECONDS = 60
 _clerk_token_cache: dict[str, tuple[float, dict]] = {}
 
 def get_google_drive_service_from_clerk(user_id: str, clerk_secret: str):
-    """Get Google Drive service by fetching OAuth token from Clerk."""
     try:
         headers = {
             "Authorization": f"Bearer {clerk_secret}",
             "Content-Type": "application/json"
         }
-        
-        # Get user's OAuth access tokens from Clerk
-        # This endpoint returns OAuth tokens for the user's connected accounts
+
         response = requests.get(
             f"{CLERK_API_URL}/users/{user_id}/oauth_access_tokens/google",
             headers=headers,
@@ -42,17 +37,14 @@ def get_google_drive_service_from_clerk(user_id: str, clerk_secret: str):
         if response.status_code == 200:
             data = response.json()
             print(f"OAuth token data: {data}")
-            
-            # Check if we have tokens
+
             if data and len(data) > 0:
-                token_data = data[0]  # Get first token
+                token_data = data[0]
                 access_token = token_data.get('token')
-                
+
                 if access_token:
                     print(f"Found Google access token")
-                    
-                    # Create credentials with just access token
-                    # Google client library will handle token refresh if needed
+
                     creds = Credentials(
                         token=access_token,
                         token_uri="https://oauth2.googleapis.com/token",
@@ -60,13 +52,12 @@ def get_google_drive_service_from_clerk(user_id: str, clerk_secret: str):
                         client_secret=settings.GOOGLE_CLIENT_SECRET,
                         scopes=SCOPES
                     )
-                    
-                    # Build Drive service
+
                     service = build('drive', 'v3', credentials=creds)
                     return service
         else:
             print(f"Failed to get OAuth token: {response.text}")
-        
+
         return None
     except Exception as e:
         print(f"Error getting Google Drive service from Clerk: {e}")
@@ -75,7 +66,6 @@ def get_google_drive_service_from_clerk(user_id: str, clerk_secret: str):
         return None
 
 def verify_clerk_token(token: str) -> dict | None:
-    """Verify a Clerk JWT token using Clerk's API, with a short-lived cache."""
     cached = _clerk_token_cache.get(token)
     if cached and time.time() - cached[0] < _CLERK_TOKEN_CACHE_TTL_SECONDS:
         return cached[1]
@@ -92,91 +82,80 @@ def _verify_clerk_token_uncached(token: str) -> dict | None:
         if not clerk_secret:
             print("CLERK_SECRET_KEY not set in settings")
             return None
-        
-        # Call Clerk's sessions/verify endpoint
+
         headers = {
             "Authorization": f"Bearer {clerk_secret}",
             "Content-Type": "application/json"
         }
-        
+
         print(f"Verifying token with Clerk API...")
-        
-        # Try to decode the JWT first to get session ID
+
         import jwt
         try:
             decoded = jwt.decode(token, options={"verify_signature": False})
-            session_id = decoded.get('sid')  # Session ID
+            session_id = decoded.get('sid')
             print(f"Decoded session_id: {session_id}")
         except Exception as e:
             print(f"Failed to decode JWT: {e}")
             session_id = None
-        
-        # Verify using the token directly with GET request
-        # Clerk expects the token in the Authorization header
+
         verify_headers = {
-            "Authorization": f"Bearer {token}",  # Use user's token, not secret
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
-        # Try retrieving the session
+
         if session_id:
             response = requests.get(
                 f"{CLERK_API_URL}/sessions/{session_id}",
-                headers=headers,  # Use secret key for admin access
+                headers=headers,
                 timeout=10
             )
         else:
-            # Fallback: try to validate by getting current user info
             response = requests.get(
                 f"{CLERK_API_URL}/me",
-                headers=verify_headers,  # Use user's token
+                headers=verify_headers,
                 timeout=10
             )
-        
+
         print(f"Clerk verify response status: {response.status_code}")
-        
+
         if response.status_code == 200:
             data = response.json()
             print(f"Session data: {data}")
-            
-            # Handle different response formats
+
             if 'id' in data and 'user_id' in data:
-                # Session object format
                 user_id = data.get('user_id')
             elif 'id' in data:
-                # User object format (from /me endpoint)
                 user_id = data.get('id')
             else:
                 user_id = None
-            
+
             if user_id:
                 print(f"User ID: {user_id}")
-                # Get user details from Clerk
                 user_response = requests.get(
                     f"{CLERK_API_URL}/users/{user_id}",
                     headers=headers,
                     timeout=10
                 )
-                
+
                 if user_response.status_code == 200:
                     user_data = user_response.json()
                     email = None
                     if user_data.get('email_addresses'):
                         email = user_data['email_addresses'][0].get('email_address')
-                    
+
                     print(f"Found user email: {email}")
-                    # Include full user data for Google Drive integration
                     return {
                         'user_id': user_id,
                         'email': email,
                         'first_name': user_data.get('first_name'),
                         'last_name': user_data.get('last_name'),
                         'external_accounts': user_data.get('external_accounts', []),
-                        'full_user_data': user_data  # Store full data for potential future use
+                        'full_user_data': user_data
                     }
         else:
             print(f"Clerk verify failed: {response.status_code} - {response.text}")
-        
+
         return None
     except Exception as e:
         print(f"Clerk verification error: {e}")
@@ -189,40 +168,32 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """Get current user from either Clerk token or legacy JWT."""
-    
-    # Get token from header
     token = None
     if credentials:
         token = credentials.credentials
     else:
-        # Try to get from Authorization header directly
         auth_header = request.headers.get('Authorization')
         if auth_header and auth_header.startswith('Bearer '):
             token = auth_header.split(' ')[1]
-    
+
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No authentication token provided")
-    
-    # First, try to verify as Clerk token
+
     clerk_data = verify_clerk_token(token)
-    
+
     if clerk_data:
-        # Find or create user by Clerk ID
         clerk_user_id = clerk_data['user_id']
         email = clerk_data.get('email') or f"{clerk_user_id}@clerk.user"
-        
-        # Look for existing user by email
+
         user = db.query(User).filter(User.email == email).first()
-        
+
         if not user:
-            # Create new user
             import secrets
             from app.utils.auth import hash_password
-            
+
             user = User(
                 email=email,
-                password_hash=hash_password(secrets.token_hex(32)),  # Random password
+                password_hash=hash_password(secrets.token_hex(32)),
             )
             db.add(user)
             db.commit()
@@ -230,14 +201,12 @@ def get_current_user(
 
             from app.services.workspace import link_pending_invites
             link_pending_invites(db, user)
-        
-        # Attach Clerk user data to the user object for Google Drive integration
-        # Store external_accounts in a way that can be accessed later
+
         user._clerk_data = clerk_data
-        
+
         return user
-    
-    # Fall back to legacy JWT verification
+
+    # falls back to legacy JWT if not a clerk token, kept for old sessions
     from app.utils.auth import decode_token
     user_id = decode_token(token)
     

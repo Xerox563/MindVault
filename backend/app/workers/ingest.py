@@ -9,9 +9,6 @@ def _publish(file_id: int, payload: dict):
     redis_conn.publish(f"ingest:{file_id}", json.dumps(payload))
 
 def ingest_file(file_id: int):
-    """RQ job: runs in the worker process, outside the request/response cycle, so a
-    large file's chunk-embed-store loop never blocks the upload request. Progress is
-    pushed to Redis pub/sub so the API process's websocket can relay it to the browser."""
     db = SessionLocal()
     try:
         file = db.query(File).filter(File.id == file_id).first()

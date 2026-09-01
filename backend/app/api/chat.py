@@ -36,19 +36,9 @@ def _save_chat(db: Session, user: User, question: str, answer: str, sources: lis
 @router.post("/ask", response_model=AskResponse)
 @limiter.limit("30/minute")  # Rate limit: 30 chat requests per minute
 def ask_question(request: Request, request_data: AskRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """
-    Process a question and return an answer.
-    
-    Uses query result caching to reduce LLM costs:
-    - Checks cache first for identical/similar questions
-    - Returns cached result if found (saves LLM API call)
-    - Caches new results for future identical questions
-    """
-    # Check cache first
     cached_result = get_cached_result(db, request_data.question)
-    
+
     if cached_result:
-        # Return cached result
         result = {
             "answer": cached_result["answer"],
             "sources": cached_result["sources"],
@@ -56,11 +46,9 @@ def ask_question(request: Request, request_data: AskRequest, db: Session = Depen
             "cache_hits": cached_result["hit_count"]
         }
     else:
-        # No cache hit - call LLM
         result = rag_query(db, request_data.question, current_user)
         result["from_cache"] = False
-        
-        # Cache the result for future use
+
         cache_result(db, request_data.question, result["answer"], result["sources"])
 
     _save_chat(db, current_user, request_data.question, result["answer"], result["sources"])
@@ -75,7 +63,6 @@ def ask_question(request: Request, request_data: AskRequest, db: Session = Depen
 @router.post("/ask/stream")
 @limiter.limit("30/minute")
 def ask_question_stream(request: Request, request_data: AskRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Same as /ask but streams the answer as server-sent events instead of waiting for the full response"""
     cached_result = get_cached_result(db, request_data.question)
 
     def sse(event: dict) -> str:
@@ -115,7 +102,6 @@ def get_history(db: Session = Depends(get_db), current_user: User = Depends(get_
 
 @router.get("/llm/status")
 def get_llm_status(current_user: User = Depends(get_current_user)):
-    """Get all available LLM providers/models for this user (server-configured + their own saved API keys)."""
     user_keys = get_user_api_keys(current_user)
     providers = llm_service.get_available_providers(user_api_keys=user_keys)
     current_provider = current_user.preferred_provider or settings.LLM_PROVIDER
@@ -129,21 +115,18 @@ def get_llm_status(current_user: User = Depends(get_current_user)):
 
 @router.post("/llm/set-provider/{provider_id}")
 def set_llm_provider(provider_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Set the active LLM provider for this user (persisted per-user, not global)."""
     current_user.preferred_provider = provider_id
     db.commit()
     return {"message": f"Provider set to: {provider_id}"}
 
 @router.get("/llm/embedding-status")
 def get_embedding_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get all available embedding models for this user, fetched live from each
-    provider (never hardcoded), plus whichever one is currently selected."""
     from app.services.embedding_provider import resolve_embedding_provider
     user_keys = get_user_api_keys(current_user)
     models = llm_service.get_available_embedding_models(user_api_keys=user_keys)
 
     if not current_user.preferred_embedding_provider:
-        resolve_embedding_provider(db, current_user)  # auto-pick + persist a default
+        resolve_embedding_provider(db, current_user)
 
     return {
         "current_provider": current_user.preferred_embedding_provider,
@@ -152,15 +135,13 @@ def get_embedding_status(db: Session = Depends(get_db), current_user: User = Dep
 
 @router.post("/llm/set-embedding-provider/{provider_id}")
 def set_embedding_provider(provider_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Set the embedding model for this user. Existing files keep whatever vectors
-    they already have - this only affects new uploads and new questions."""
+    # existing files keep their old vectors, this only affects new uploads and questions
     current_user.preferred_embedding_provider = provider_id
     db.commit()
     return {"message": f"Embedding model set to: {provider_id}"}
 
 @router.post("/llm/ollama/pull/{model_name}")
 def pull_ollama_model(model_name: str, current_user: User = Depends(get_current_user)):
-    """Pull an Ollama model"""
     success = llm_service.pull_ollama_model(model_name)
     if success:
         return {"message": f"Successfully pulled model: {model_name}"}
@@ -169,19 +150,16 @@ def pull_ollama_model(model_name: str, current_user: User = Depends(get_current_
 
 @router.get("/cache/stats")
 def get_cache_statistics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Get query cache statistics"""
     return get_cache_stats(db)
 
 @router.post("/cache/clear-expired")
 def clear_cache_expired(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Clear all expired cache entries"""
     count = clear_expired_cache(db)
     return {"message": f"Cleared {count} expired cache entries"}
 
 @router.post("/cache/clear-all")
 def clear_cache_all(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Clear all cache entries (admin only)"""
-    # In production, add admin check here
+    # TODO add admin check before this ships
     from app.models.user import QueryCache
     count = db.query(QueryCache).count()
     db.query(QueryCache).delete()

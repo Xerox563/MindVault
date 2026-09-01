@@ -17,7 +17,6 @@ from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 
 app = FastAPI(title="MindVault API", version="1.0.0")
 
-# Add rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 

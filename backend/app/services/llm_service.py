@@ -8,7 +8,6 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1"
 
 def _model_override(provider_id: str, prefix: str, default_model: str) -> str:
-    """'mistral' -> default_model, 'mistral-mistral-small-latest' -> 'mistral-small-latest'."""
     if provider_id == prefix:
         return default_model
     if provider_id.startswith(prefix + "-"):
@@ -27,14 +26,7 @@ def _build_messages(prompt: str, context: str) -> List[Dict[str, str]]:
     ]
 
 class LLMService:
-    """Unified LLM service supporting Mistral, Gemini, OpenRouter (server or per-user API
-    key) and Ollama. Available models for each cloud provider are fetched live from that
-    provider's own model-list endpoint rather than hardcoded.
-
-    Providers are resolved per-call so a user-supplied API key (saved via
-    /api/settings/api-keys) works immediately without a server restart, and so
-    concurrent users with different keys/models never share mutable state.
-    """
+    """Providers are resolved per call so a saved API key works right away with no restart."""
 
     def __init__(self):
         self.providers = {}
@@ -42,8 +34,6 @@ class LLMService:
         self._init_ollama()
 
     def _init_ollama(self):
-        """Probe Ollama once at startup; get_available_providers() re-probes lazily
-        so starting Ollama after the backend doesn't require a restart."""
         try:
             import ollama
             if settings.OLLAMA_HOST and settings.OLLAMA_HOST != "http://localhost:11434":
@@ -60,7 +50,6 @@ class LLMService:
             self.providers['ollama'] = None
 
     def _ollama_client(self):
-        """Return the ollama module, re-probing if it wasn't available at startup."""
         if self.providers.get('ollama'):
             return self.providers['ollama']['client']
         try:
@@ -75,8 +64,7 @@ class LLMService:
         except Exception:
             return None
 
-    # Mistral's model list includes non-chat models (embeddings, OCR, moderation,
-    # audio/TTS, code-completion-only) that would just error out if picked here.
+    # these Mistral models are not chat models, so skip them
     _MISTRAL_NON_CHAT_HINTS = ("embed", "ocr", "moderation", "tts", "transcribe", "voxtral", "fim")
 
     def _list_mistral_models(self, api_key: str) -> List[str]:
@@ -129,9 +117,7 @@ class LLMService:
             return []
 
     def get_available_embedding_models(self, user_api_keys: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
-        """Same idea as get_available_providers but for embeddings - fetched live from
-        each provider, never hardcoded. OpenRouter has no embeddings endpoint so it's
-        excluded here entirely."""
+        # openrouter has no embeddings endpoint so it is left out here
         user_api_keys = user_api_keys or {}
         available = []
 
@@ -172,8 +158,6 @@ class LLMService:
             return []
 
     def get_available_providers(self, user_api_keys: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
-        """List all usable providers, with each cloud provider's actual models fetched
-        live from its own API (not hardcoded) once a key is available."""
         user_api_keys = user_api_keys or {}
         available = []
 
@@ -182,7 +166,7 @@ class LLMService:
             source = 'user' if user_api_keys.get('mistral') else 'server'
             models = self._list_mistral_models(mistral_key)
             if not models:
-                models = ['mistral-large-latest']  # key works but listing failed - keep a usable default
+                models = ['mistral-large-latest']  # listing failed, still keep a usable default
             for model_id in models:
                 available.append({
                     'id': f'mistral-{model_id}',
@@ -241,9 +225,7 @@ class LLMService:
         return available
 
     def generate_chat_response(self, prompt: str, context: str = "", provider_id: str = "mistral", api_key: Optional[str] = None) -> tuple[str, Optional[Dict[str, int]]]:
-        """Returns (response_text, usage) where usage is {"prompt_tokens", "completion_tokens"}
-        taken from the provider's own accounting, or None if the provider doesn't report it
-        (callers should fall back to estimating from text length)."""
+        # usage is None if the provider does not report it, so callers can estimate instead
         try:
             messages = _build_messages(prompt, context)
 
@@ -332,7 +314,6 @@ class LLMService:
         return text, usage
 
     def generate_chat_response_stream(self, prompt: str, context: str = "", provider_id: str = "mistral", api_key: Optional[str] = None):
-        """Yields (delta_text, usage) as the answer streams in; usage is only set on the last chunk."""
         try:
             messages = _build_messages(prompt, context)
 
@@ -359,9 +340,7 @@ class LLMService:
                     yield "No Gemini API key configured. Add one under Settings to use Gemini.", None
                     return
                 model = _model_override(provider_id, 'gemini', 'gemini-1.5-flash')
-                # Gemini's streaming endpoint is real but fiddlier to parse (SSE of partial JSON
-                # objects); a non-streamed call plus a single yield keeps this provider correct
-                # without more surface area than the "quick win" this feature needs.
+                # not truly streamed since gemini's stream format needs more parsing, but still correct
                 text, usage = self._gemini_chat(model, messages, key)
                 yield text, usage
                 return
@@ -427,10 +406,7 @@ class LLMService:
                 }
 
     def generate_embedding(self, text: str, provider_id: str = "mistral", api_key: Optional[str] = None) -> tuple[List[float], Optional[Dict[str, int]]]:
-        """Returns (embedding_vector, usage) where usage is {"prompt_tokens"} taken from the
-        provider's own accounting, or None if unavailable (callers should estimate instead).
-        OpenRouter has no stable embeddings endpoint, so it isn't supported here - pick
-        Mistral, Gemini or Ollama for the embedding side if you're using OpenRouter for chat."""
+        # openrouter has no stable embeddings endpoint so it is not supported here
         try:
             if provider_id.startswith('ollama'):
                 client = self._ollama_client()
@@ -487,5 +463,4 @@ class LLMService:
             log_error(f"Error pulling Ollama model: {str(e)}")
             return False
 
-# Create singleton instance (holds only the stateless Ollama connection probe)
 llm_service = LLMService()

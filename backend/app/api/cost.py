@@ -1,7 +1,3 @@
-"""
-Cost Monitoring API Endpoints
-Dashboard for tracking LLM usage and costs
-"""
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -24,7 +20,6 @@ def get_cost_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get cost statistics for the current user"""
     try:
         stats = get_user_cost_stats(db, current_user.id, days=days)
         budget = get_or_create_budget(db, current_user.id)
@@ -52,7 +47,6 @@ def get_daily_cost(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get daily cost breakdown"""
     try:
         stats = get_user_cost_stats(db, current_user.id, days=days)
         return {
@@ -70,7 +64,6 @@ def get_cost_by_provider(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get cost breakdown by provider"""
     try:
         stats = get_user_cost_stats(db, current_user.id, days=days)
         return {
@@ -87,7 +80,6 @@ def get_budget(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get current budget settings"""
     try:
         budget = get_or_create_budget(db, current_user.id)
         alert = check_budget_alert(db, current_user.id)
@@ -110,7 +102,6 @@ def update_user_budget(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update budget settings"""
     try:
         budget = update_budget(
             db,
@@ -136,14 +127,12 @@ def get_alert_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Check if user should be alerted about budget"""
     try:
         alert = check_budget_alert(db, current_user.id)
         return alert
     except Exception as e:
         raise HTTPException(500, f"Failed to check alert: {str(e)}")
 
-# Admin endpoints
 @router.get("/admin/global-stats")
 @limiter.limit("30/minute")
 def get_admin_global_stats(
@@ -152,8 +141,7 @@ def get_admin_global_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get global cost statistics (admin only)"""
-    # TODO: Add admin check
+    # TODO add admin check
     try:
         stats = get_global_cost_stats(db, days=days)
         return stats

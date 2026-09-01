@@ -208,7 +208,6 @@ export default function CostDashboard() {
 
   return (
     <div className="min-h-screen bg-[#111111] text-white">
-      {/* Header */}
       <header className="border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -229,7 +228,6 @@ export default function CostDashboard() {
             </div>
             
             <div className="flex items-center gap-3">
-              {/* Period Selector */}
               <div className="flex bg-white/5 rounded-lg p-1">
                 {[7, 30, 90].map((days) => (
                   <button
@@ -246,7 +244,6 @@ export default function CostDashboard() {
                 ))}
               </div>
               
-              {/* Settings Button */}
               <motion.button
                 onClick={() => setShowBudgetModal(true)}
                 whileHover={{ scale: 1.05 }}
@@ -261,9 +258,7 @@ export default function CostDashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Alert Banner */}
         {isNearLimit && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -282,9 +277,7 @@ export default function CostDashboard() {
           </motion.div>
         )}
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Total Cost */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -301,7 +294,6 @@ export default function CostDashboard() {
             <p className="text-sm text-gray-500 mt-1">Last {selectedPeriod} days</p>
           </motion.div>
 
-          {/* This Month */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -328,7 +320,6 @@ export default function CostDashboard() {
             </div>
           </motion.div>
 
-          {/* Total Tokens */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -345,7 +336,6 @@ export default function CostDashboard() {
             <p className="text-sm text-gray-500 mt-1">Across all requests</p>
           </motion.div>
 
-          {/* Total Requests */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -363,9 +353,7 @@ export default function CostDashboard() {
           </motion.div>
         </div>
 
-        {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Daily Cost Chart */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -406,7 +394,6 @@ export default function CostDashboard() {
             </div>
           </motion.div>
 
-          {/* Cost by Provider */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -451,7 +438,6 @@ export default function CostDashboard() {
           </motion.div>
         </div>
 
-        {/* Budget Status */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -507,7 +493,6 @@ export default function CostDashboard() {
         </motion.div>
       </main>
 
-      {/* Budget Settings Modal */}
       <AnimatePresence>
         {showBudgetModal && (
           <>
