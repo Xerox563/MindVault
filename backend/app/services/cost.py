@@ -291,8 +291,12 @@ def check_budget_alert(db: Session, user_id: int) -> Optional[Dict[str, Any]]:
             # Update last alert sent
             budget.last_alert_sent = datetime.utcnow()
             db.commit()
-            
+
             log_info(f"Budget alert triggered for user {user_id}: {alert_info['percentage']}% of budget used")
+
+            if budget.alert_email:
+                from app.services.email import send_budget_alert_email
+                send_budget_alert_email(budget.alert_email, alert_info["percentage"], alert_info["current_cost"], alert_info["monthly_budget"])
         
         return alert_info
         

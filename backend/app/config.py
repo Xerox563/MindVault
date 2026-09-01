@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     NOTION_CLIENT_SECRET: str = ""
     NOTION_REDIRECT_URI: str = "http://localhost:8000/api/integrations/notion/callback"
 
+    BREVO_API_KEY: str = ""
+    BREVO_SENDER_EMAIL: str = "noreply@mindvault.app"
+    BREVO_SENDER_NAME: str = "MindVault"
+    FRONTEND_URL: str = "http://localhost:3000"
+
     class Config:
         env_file = ".env"
 

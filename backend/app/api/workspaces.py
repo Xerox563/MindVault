@@ -7,6 +7,7 @@ from app.services.workspace import (
     list_workspaces_for_user, create_workspace, invite_member,
     get_membership, require_role, get_active_workspace_id
 )
+from app.services.email import send_workspace_invite_email
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 
@@ -61,6 +62,10 @@ def invite(workspace_id: int, payload: dict, db: Session = Depends(get_db), curr
         raise HTTPException(400, "Email is required")
 
     member = invite_member(db, workspace_id, email, role)
+
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    send_workspace_invite_email(email, workspace.name, current_user.email, role)
+
     return {"id": member.id, "email": member.invited_email, "role": member.role, "status": member.status}
 
 @router.delete("/{workspace_id}/members/{member_id}")
