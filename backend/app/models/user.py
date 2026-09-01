@@ -14,6 +14,7 @@ class User(Base):
     slack_bot_token = Column(String, nullable=True)
     notion_api_key = Column(String, nullable=True)
     preferred_provider = Column(String, nullable=True)
+    preferred_embedding_provider = Column(String, nullable=True)
     api_keys_encrypted = Column(Text, nullable=True)
     current_workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

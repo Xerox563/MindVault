@@ -10,7 +10,6 @@ from app.services.slack import get_slack_channels, get_channel_history_text, sea
 from app.services.notion import get_notion_databases, get_notion_pages, extract_notion_as_text
 from app.services.extractor import extract_text
 from app.services.processor import process_file
-from app.services.user_settings import get_user_api_keys, base_provider
 from app.services.sync import record_sync, get_synced_files_for_user
 from app.models.user import File as FileModel
 from app.core.rate_limit import limiter
@@ -87,9 +86,7 @@ def sync_spreadsheet(request: Request, spreadsheet_id: str, db: Session = Depend
             status="active"
         )
         
-        provider_id = current_user.preferred_provider or settings.LLM_PROVIDER
-        api_key = get_user_api_keys(current_user).get(base_provider(provider_id))
-        process_file(db, file_record, provider_id=provider_id, api_key=api_key)
+        process_file(db, file_record)
         
         return {"message": "Sheet synced successfully", "file_id": file_record.id}
     except Exception as e:
@@ -154,9 +151,7 @@ def sync_slack_channel(request: Request, channel_id: str, channel_name: str = No
             status="active"
         )
         
-        provider_id = current_user.preferred_provider or settings.LLM_PROVIDER
-        api_key = get_user_api_keys(current_user).get(base_provider(provider_id))
-        process_file(db, file_record, provider_id=provider_id, api_key=api_key)
+        process_file(db, file_record)
         
         return {"message": "Slack channel synced successfully", "file_id": file_record.id}
     except Exception as e:
@@ -220,9 +215,7 @@ def sync_notion_page(request: Request, page_id: str, db: Session = Depends(get_d
             status="active"
         )
         
-        provider_id = current_user.preferred_provider or settings.LLM_PROVIDER
-        api_key = get_user_api_keys(current_user).get(base_provider(provider_id))
-        process_file(db, file_record, provider_id=provider_id, api_key=api_key)
+        process_file(db, file_record)
         
         return {"message": "Notion page synced successfully", "file_id": file_record.id}
     except Exception as e:
@@ -274,9 +267,7 @@ def sync_notion_database(request: Request, database_id: str, db: Session = Depen
             status="active"
         )
         
-        provider_id = current_user.preferred_provider or settings.LLM_PROVIDER
-        api_key = get_user_api_keys(current_user).get(base_provider(provider_id))
-        process_file(db, file_record, provider_id=provider_id, api_key=api_key)
+        process_file(db, file_record)
         
         return {"message": "Notion database synced successfully", "file_id": file_record.id}
     except Exception as e:

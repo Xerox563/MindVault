@@ -134,6 +134,30 @@ def set_llm_provider(provider_id: str, db: Session = Depends(get_db), current_us
     db.commit()
     return {"message": f"Provider set to: {provider_id}"}
 
+@router.get("/llm/embedding-status")
+def get_embedding_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Get all available embedding models for this user, fetched live from each
+    provider (never hardcoded), plus whichever one is currently selected."""
+    from app.services.embedding_provider import resolve_embedding_provider
+    user_keys = get_user_api_keys(current_user)
+    models = llm_service.get_available_embedding_models(user_api_keys=user_keys)
+
+    if not current_user.preferred_embedding_provider:
+        resolve_embedding_provider(db, current_user)  # auto-pick + persist a default
+
+    return {
+        "current_provider": current_user.preferred_embedding_provider,
+        "providers": models,
+    }
+
+@router.post("/llm/set-embedding-provider/{provider_id}")
+def set_embedding_provider(provider_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Set the embedding model for this user. Existing files keep whatever vectors
+    they already have - this only affects new uploads and new questions."""
+    current_user.preferred_embedding_provider = provider_id
+    db.commit()
+    return {"message": f"Embedding model set to: {provider_id}"}
+
 @router.post("/llm/ollama/pull/{model_name}")
 def pull_ollama_model(model_name: str, current_user: User = Depends(get_current_user)):
     """Pull an Ollama model"""

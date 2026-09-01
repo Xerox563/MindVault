@@ -9,7 +9,6 @@ from app.config import settings
 from app.services.drive import list_drive_files, download_drive_file
 from app.services.extractor import extract_text
 from app.services.processor import process_file
-from app.services.user_settings import get_user_api_keys, base_provider
 from app.services.sync import (
     get_synced_file, needs_sync, record_sync, 
     mark_sync_error, get_synced_files_for_user
@@ -285,9 +284,7 @@ def sync_drive_file(request: Request, file_id: str, db: Session = Depends(get_db
         if text:
             file_record.extracted_text = text
             db.commit()
-            provider_id = current_user.preferred_provider or settings.LLM_PROVIDER
-            api_key = get_user_api_keys(current_user).get(base_provider(provider_id))
-            process_file(db, file_record, provider_id=provider_id, api_key=api_key)
+            process_file(db, file_record)
 
         return {
             "message": "File synced successfully" if not synced_file else "File updated successfully",

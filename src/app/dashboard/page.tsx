@@ -32,6 +32,12 @@ interface WorkspaceSummary { id: number; name: string; role: "owner" | "editor" 
 interface WorkspaceMemberItem { id: number; email: string; role: string; status: string; }
 
 const PROVIDER_LABELS: Record<string, string> = { mistral: "Mistral AI", ollama: "Ollama", gemini: "Google Gemini", openrouter: "OpenRouter" };
+const base_provider_client = (providerId: string) => {
+  for (const prefix of ["ollama", "mistral", "gemini", "openrouter"]) {
+    if (providerId === prefix || providerId.startsWith(`${prefix}-`)) return prefix;
+  }
+  return providerId;
+};
 const SOURCE_ICONS: Record<string, React.ElementType> = { local: FileIcon, drive: Cloud, sheets: Table, slack: Hash, notion: FileJson };
 const SOURCE_COLORS: Record<string, string> = { local: "text-gray-400", drive: "text-blue-400", sheets: "text-green-400", slack: "text-purple-400", notion: "text-yellow-400" };
 const INTEGRATION_ICONS: Record<string, React.ElementType> = { google_drive: Cloud, google_sheets: Table, slack: Hash, notion: FileJson };
@@ -101,6 +107,10 @@ export default function Dashboard() {
   const [connectingDrive, setConnectingDrive] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKeyStatus[]>([]);
+  const [embeddingModels, setEmbeddingModels] = useState<LLMProvider[]>([]);
+  const [currentEmbeddingProvider, setCurrentEmbeddingProvider] = useState<string | null>(null);
+  const [embeddingModelsLoading, setEmbeddingModelsLoading] = useState(false);
+  const [savingEmbeddingProvider, setSavingEmbeddingProvider] = useState(false);
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
   const [savingProvider, setSavingProvider] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -430,6 +440,7 @@ export default function Dashboard() {
         setApiKeyInputs((prev) => ({ ...prev, [provider]: "" }));
         await fetchApiKeys();
         await fetchLLMStatus();
+        await fetchEmbeddingStatus();
       } else { const error = await res.json(); alert(error.detail || "Failed to save API key"); }
     } catch (error) { console.error("Failed to save API key:", error); }
     finally { setSavingProvider(null); }
@@ -441,12 +452,38 @@ export default function Dashboard() {
     setSavingProvider(provider);
     try {
       const res = await fetch(`${API_URL}/api/settings/api-keys/${provider}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) { await fetchApiKeys(); await fetchLLMStatus(); }
+      if (res.ok) { await fetchApiKeys(); await fetchLLMStatus(); await fetchEmbeddingStatus(); }
     } catch (error) { console.error("Failed to remove API key:", error); }
     finally { setSavingProvider(null); }
   };
 
-  const openSettings = () => { setShowSettings(true); fetchApiKeys(); };
+  const fetchEmbeddingStatus = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+    setEmbeddingModelsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/llm/embedding-status`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setEmbeddingModels(data.providers || []);
+        setCurrentEmbeddingProvider(data.current_provider ?? null);
+      }
+    } catch (error) { console.error("Failed to fetch embedding status:", error); }
+    finally { setEmbeddingModelsLoading(false); }
+  };
+
+  const setEmbeddingProvider = async (providerId: string) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    setSavingEmbeddingProvider(true);
+    try {
+      const res = await fetch(`${API_URL}/api/llm/set-embedding-provider/${encodeURIComponent(providerId)}`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setCurrentEmbeddingProvider(providerId);
+    } catch (error) { console.error("Failed to set embedding provider:", error); }
+    finally { setSavingEmbeddingProvider(false); }
+  };
+
+  const openSettings = () => { setShowSettings(true); fetchApiKeys(); fetchEmbeddingStatus(); };
   const openIntegrations = () => { setShowIntegrations(true); if (integrations.find((i) => i.id === "google_drive")?.connected) fetchDriveFiles(); };
 
   const handleUpload = async (file: File) => {
@@ -1059,7 +1096,32 @@ export default function Dashboard() {
 
       <AnimatePresence>{showModelSelector && providers.length > 0 && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModelSelector(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="fixed right-4 bottom-24 w-[400px] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Choose a model</h3><button onClick={() => setShowModelSelector(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 max-h-[400px] overflow-y-auto">{providers.filter(p => p.type === "cloud").length > 0 && (<><p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Cloud models</p><div className="space-y-1 mb-6">{providers.filter(p => p.type === "cloud").map((provider) => (<button key={provider.id} onClick={() => { setLLMProvider(provider.id); setShowModelSelector(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${selectedProvider?.id === provider.id ? "bg-white/10" : "hover:bg-white/5"}`}><div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><Cpu className="w-4 h-4" /></div><div className="flex-1 text-left"><span className="font-medium">{provider.name}</span><p className="text-xs text-gray-500">{provider.model}</p></div>{selectedProvider?.id === provider.id && <Check className="w-4 h-4 text-purple-400" />}</button>))}</div></>)}{providers.filter(p => p.type === "local").length > 0 && (<><p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Local models</p><div className="space-y-1">{providers.filter(p => p.type === "local").map((provider) => (<button key={provider.id} onClick={() => { setLLMProvider(provider.id); setShowModelSelector(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${selectedProvider?.id === provider.id ? "bg-white/10" : "hover:bg-white/5"}`}><div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center"><HardDrive className="w-4 h-4" /></div><div className="flex-1 text-left"><span className="font-medium">{provider.name}</span><p className="text-xs text-gray-500">{provider.model}</p></div><span className="text-xs text-gray-500 bg-white/10 px-2 py-1 rounded">Local</span>{selectedProvider?.id === provider.id && <Check className="w-4 h-4 text-purple-400" />}</button>))}</div></>)}</div></motion.div></>)}</AnimatePresence>
 
-      <AnimatePresence>{showSettings && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSettings(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[440px] h-fit bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Model API Keys</h3><button onClick={() => setShowSettings(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"><p className="text-xs text-gray-500">Add your own API key to unlock a model in the selector below. Local Ollama models need no key.</p>{apiKeys.map((key) => (<div key={key.provider} className="border border-white/10 rounded-xl p-3"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><Key className="w-4 h-4 text-gray-400" /><span className="text-sm font-medium">{PROVIDER_LABELS[key.provider] || key.provider}</span></div>{key.configured && <span className="text-xs text-green-400">{key.source === "user" ? "Your key saved" : "Set by server"}</span>}</div><div className="flex items-center gap-2"><input type="password" placeholder={key.configured ? "Replace key..." : "Enter API key..."} value={apiKeyInputs[key.provider] || ""} onChange={(e) => setApiKeyInputs((prev) => ({ ...prev, [key.provider]: e.target.value }))} className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" /><button onClick={() => saveApiKey(key.provider)} disabled={savingProvider === key.provider || !apiKeyInputs[key.provider]?.trim()} className="px-3 py-2 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50">{savingProvider === key.provider ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}</button>{key.source === "user" && <button onClick={() => removeApiKey(key.provider)} disabled={savingProvider === key.provider} className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-lg disabled:opacity-50" title="Remove key"><Trash2 className="w-3.5 h-3.5" /></button>}</div></div>))}</div></motion.div></>)}</AnimatePresence>
+      <AnimatePresence>{showSettings && (<><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSettings(false)} className="fixed inset-0 bg-black/50 z-50" /><motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[440px] h-fit bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl"><div className="p-4 border-b border-white/10 flex items-center justify-between"><h3 className="font-semibold">Model API Keys</h3><button onClick={() => setShowSettings(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"><p className="text-xs text-gray-500">Add your own API key to unlock a model in the selector below. Local Ollama models need no key.</p>{apiKeys.map((key) => (<div key={key.provider} className="border border-white/10 rounded-xl p-3"><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><Key className="w-4 h-4 text-gray-400" /><span className="text-sm font-medium">{PROVIDER_LABELS[key.provider] || key.provider}</span></div>{key.configured && <span className="text-xs text-green-400">{key.source === "user" ? "Your key saved" : "Set by server"}</span>}</div><div className="flex items-center gap-2"><input type="password" placeholder={key.configured ? "Replace key..." : "Enter API key..."} value={apiKeyInputs[key.provider] || ""} onChange={(e) => setApiKeyInputs((prev) => ({ ...prev, [key.provider]: e.target.value }))} className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" /><button onClick={() => saveApiKey(key.provider)} disabled={savingProvider === key.provider || !apiKeyInputs[key.provider]?.trim()} className="px-3 py-2 text-xs bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50">{savingProvider === key.provider ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}</button>{key.source === "user" && <button onClick={() => removeApiKey(key.provider)} disabled={savingProvider === key.provider} className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-lg disabled:opacity-50" title="Remove key"><Trash2 className="w-3.5 h-3.5" /></button>}</div></div>))}
+
+              <div className="border-t border-white/10 pt-4">
+                <p className="text-sm font-medium mb-1">Embedding model</p>
+                <p className="text-xs text-gray-500 mb-2">Used to index your documents and match them to your questions. Fetched live from whichever provider you have a key for.</p>
+                {embeddingModelsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" />Loading models...</div>
+                ) : embeddingModels.length === 0 ? (
+                  <p className="text-xs text-orange-400">No embedding models available yet - add an API key above (Mistral, Gemini) or run Ollama locally.</p>
+                ) : (
+                  <div className="relative">
+                    <select
+                      value={currentEmbeddingProvider || ""}
+                      onChange={(e) => setEmbeddingProvider(e.target.value)}
+                      disabled={savingEmbeddingProvider}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 disabled:opacity-50"
+                    >
+                      {embeddingModels.map((m) => (
+                        <option key={m.id} value={m.id}>{PROVIDER_LABELS[base_provider_client(m.id)] || base_provider_client(m.id)} - {m.model}</option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-gray-600 mt-1.5">Changing this only affects new uploads and new questions - files already indexed keep their existing vectors.</p>
+                  </div>
+                )}
+              </div>
+              </div></motion.div></>)}</AnimatePresence>
 
       <AnimatePresence>
         {showHistory && (

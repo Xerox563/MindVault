@@ -105,6 +105,62 @@ class LLMService:
             log_error(f"Failed to list Gemini models: {e}")
             return []
 
+    def _list_mistral_embedding_models(self, api_key: str) -> List[str]:
+        try:
+            from mistralai.client import MistralClient
+            client = MistralClient(api_key=api_key)
+            models = client.list_models()
+            return sorted(m.id for m in models.data if "embed" in m.id.lower())
+        except Exception as e:
+            log_error(f"Failed to list Mistral embedding models: {e}")
+            return []
+
+    def _list_gemini_embedding_models(self, api_key: str) -> List[str]:
+        try:
+            response = requests.get(f"{GEMINI_API_URL}/models", params={"key": api_key}, timeout=8)
+            response.raise_for_status()
+            models = response.json().get("models", [])
+            return sorted(
+                m["name"].split("/")[-1] for m in models
+                if "embedContent" in m.get("supportedGenerationMethods", [])
+            )
+        except Exception as e:
+            log_error(f"Failed to list Gemini embedding models: {e}")
+            return []
+
+    def get_available_embedding_models(self, user_api_keys: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
+        """Same idea as get_available_providers but for embeddings - fetched live from
+        each provider, never hardcoded. OpenRouter has no embeddings endpoint so it's
+        excluded here entirely."""
+        user_api_keys = user_api_keys or {}
+        available = []
+
+        mistral_key = user_api_keys.get('mistral') or settings.MISTRAL_API_KEY
+        if mistral_key:
+            source = 'user' if user_api_keys.get('mistral') else 'server'
+            for model_id in self._list_mistral_embedding_models(mistral_key):
+                available.append({'id': f'mistral-{model_id}', 'name': model_id, 'type': 'cloud', 'model': model_id, 'available': True, 'source': source})
+
+        gemini_key = user_api_keys.get('gemini') or settings.GEMINI_API_KEY
+        if gemini_key:
+            source = 'user' if user_api_keys.get('gemini') else 'server'
+            for model_id in self._list_gemini_embedding_models(gemini_key):
+                available.append({'id': f'gemini-{model_id}', 'name': model_id, 'type': 'cloud', 'model': model_id, 'available': True, 'source': source})
+
+        ollama_client = self._ollama_client()
+        if ollama_client:
+            try:
+                models = ollama_client.list()
+                for model in models.get('models', []):
+                    name = model.get('name') or model.get('model')
+                    if not name:
+                        continue
+                    available.append({'id': f'ollama-{name}', 'name': name, 'type': 'local', 'model': name, 'available': True, 'source': 'local'})
+            except Exception as e:
+                log_error(f"Failed to list Ollama models for embeddings: {e}")
+
+        return available
+
     def _list_openrouter_models(self) -> List[str]:
         try:
             response = requests.get(f"{OPENROUTER_API_URL}/models", timeout=8)
@@ -381,7 +437,7 @@ class LLMService:
                 if not client:
                     log_error("Ollama is not running or not reachable")
                     return [], None
-                embedding_model = self.providers['ollama']['embedding_model']
+                embedding_model = _model_override(provider_id, 'ollama', self.providers['ollama']['embedding_model'])
                 response = client.embeddings(model=embedding_model, prompt=text)
                 return response['embedding'], None
 
@@ -390,8 +446,9 @@ class LLMService:
                 if not key:
                     log_error("No Gemini API key configured for embeddings")
                     return [], None
+                model = _model_override(provider_id, 'gemini', 'text-embedding-004')
                 response = requests.post(
-                    f"{GEMINI_API_URL}/models/text-embedding-004:embedContent",
+                    f"{GEMINI_API_URL}/models/{model}:embedContent",
                     params={"key": key},
                     json={"content": {"parts": [{"text": text}]}},
                     timeout=30,
@@ -409,7 +466,8 @@ class LLMService:
                 return [], None
             from mistralai.client import MistralClient
             client = MistralClient(api_key=key)
-            response = client.embeddings(model='mistral-embed', input=text)
+            model = _model_override(provider_id, 'mistral', 'mistral-embed')
+            response = client.embeddings(model=model, input=text)
             usage = {"prompt_tokens": response.usage.prompt_tokens} if response.usage else None
             return response.data[0].embedding, usage
 

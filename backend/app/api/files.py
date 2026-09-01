@@ -8,7 +8,6 @@ from app.utils.deps import get_current_user
 from app.config import settings
 from app.services.extractor import extract_text
 from app.services.processor import process_file
-from app.services.user_settings import get_user_api_keys, base_provider
 from app.services.workspace import get_active_workspace_id, require_role
 from app.core.rate_limit import limiter
 
@@ -64,9 +63,7 @@ async def upload_file(
     if text:
         file_record.extracted_text = text
         db.commit()
-        provider_id = current_user.preferred_provider or settings.LLM_PROVIDER
-        api_key = get_user_api_keys(current_user).get(base_provider(provider_id))
-        process_file(db, file_record, provider_id=provider_id, api_key=api_key)
+        process_file(db, file_record)
 
     return file_record
 

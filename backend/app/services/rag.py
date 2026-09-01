@@ -4,6 +4,7 @@ from app.services.embeddings import get_embedding, get_chat_response, get_chat_r
 from app.services.vectordb import search_similar
 from app.services.user_settings import get_user_api_keys, base_provider
 from app.services.workspace import get_active_workspace_id
+from app.services.embedding_provider import resolve_embedding_provider
 from app.config import settings
 
 RELEVANCE_DISTANCE_THRESHOLD = 0.62
@@ -14,7 +15,11 @@ def _retrieve(db: Session, question: str, user: User):
     api_key = get_user_api_keys(user).get(base_provider(provider_id))
     workspace_id = get_active_workspace_id(db, user)
 
-    query_embedding = get_embedding(question, provider_id=provider_id, api_key=api_key, db=db, user_id=user.id)
+    embedding_provider_id, embedding_api_key = resolve_embedding_provider(db, user)
+    if not embedding_provider_id:
+        return provider_id, api_key, None, None
+
+    query_embedding = get_embedding(question, provider_id=embedding_provider_id, api_key=embedding_api_key, db=db, user_id=user.id)
     if not query_embedding:
         return provider_id, api_key, None, None
 
