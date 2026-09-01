@@ -1,3 +1,4 @@
+from typing import Callable, Optional
 from sqlalchemy.orm import Session
 from app.models.user import File, Chunk, Embedding, User
 from app.services.chunker import chunk_text
@@ -6,7 +7,11 @@ from app.services.embedding_provider import resolve_embedding_provider
 from app.services.vectordb import add_embedding
 from app.utils.logger import log_error
 
-def process_file(db: Session, file: File):
+def process_file(db: Session, file: File, on_progress: Optional[Callable[[int, int], None]] = None):
+    """Chunks, embeds, and stores a file's extracted text. If on_progress is given, it's
+    called as (chunks_done, chunks_total) after each chunk - the background ingestion
+    worker uses this to update progress; synchronous callers (Drive/Sheets/Slack/Notion
+    sync) just don't pass one."""
     if not file.extracted_text:
         return
 
@@ -17,6 +22,7 @@ def process_file(db: Session, file: File):
         return
 
     chunks = chunk_text(file.extracted_text)
+    total = len(chunks)
 
     for idx, text in enumerate(chunks):
         chunk_record = Chunk(
@@ -43,3 +49,6 @@ def process_file(db: Session, file: File):
                 embedding=embedding_vector,
                 metadata={"file_id": file.id, "filename": file.filename, "user_id": file.user_id, "workspace_id": file.workspace_id or 0}
             )
+
+        if on_progress:
+            on_progress(idx + 1, total)

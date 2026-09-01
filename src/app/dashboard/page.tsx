@@ -19,8 +19,9 @@ import { GradientText } from "@/components/animations";
 import DocumentViewer from "@/components/DocumentViewer";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const WS_URL = API_URL.replace(/^http/, "ws");
 
-interface FileItem { id: number; filename: string; file_type: string; file_size: number; uploaded_at?: string; source_type?: string; source?: string; }
+interface FileItem { id: number; filename: string; file_type: string; file_size: number; uploaded_at?: string; source_type?: string; source?: string; processing_status?: string; processing_progress?: number; processing_total?: number; processing_error?: string | null; }
 interface Message { id: string; role: "user" | "assistant"; content: string; streaming?: boolean; sources?: Source[]; timestamp?: string; fromCache?: boolean; cacheHits?: number; }
 interface Source { filename?: string; file_name?: string; page?: string; file_id?: number; chunk_id?: number; content?: string; source_type?: string; source?: string; }
 interface LLMProvider { id: string; name: string; type: "cloud" | "local"; model: string; available: boolean; }
@@ -133,6 +134,7 @@ export default function Dashboard() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeStream = useRef<AbortController | null>(null);
+  const watchedFileIds = useRef<Set<number>>(new Set());
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
@@ -203,7 +205,17 @@ export default function Dashboard() {
     if (!token) return;
     try {
       const res = await fetch(`${API_URL}/api/files`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setFiles(await res.json());
+      if (res.ok) {
+        const data: FileItem[] = await res.json();
+        setFiles(data);
+        // pick up watching any file still being indexed from a previous session (e.g. tab reload mid-upload)
+        for (const f of data) {
+          if ((f.processing_status === "pending" || f.processing_status === "processing") && !watchedFileIds.current.has(f.id)) {
+            watchedFileIds.current.add(f.id);
+            watchFileProgress(f.id, token);
+          }
+        }
+      }
     } catch (error) { console.error("Failed to fetch files:", error); }
   };
 
@@ -497,14 +509,37 @@ export default function Dashboard() {
     setUploadProgress(0);
     const formData = new FormData();
     formData.append("uploaded_file", file);
-    
+
     try {
       const res = await fetch(`${API_URL}/api/upload`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
       if (res.ok) {
-        setUploadProgress(100);
-        setTimeout(() => { setUploading(false); setUploadProgress(0); fetchFiles(); }, 500);
-      } else { const error = await res.json(); alert(error.detail || "Upload failed"); setUploading(false); }
+        const uploaded = await res.json();
+        setUploading(false);
+        setUploadProgress(0);
+        watchedFileIds.current.add(uploaded.id);
+        watchFileProgress(uploaded.id, token);
+        await fetchFiles(); // shows the new file immediately with a "queued" state
+      } else {
+        const error = await res.json();
+        alert(error.detail || "Upload failed");
+        setUploading(false);
+      }
     } catch (error) { console.error("Upload failed:", error); alert("Upload failed. Please try again."); setUploading(false); }
+  };
+
+  const watchFileProgress = (fileId: number, token: string) => {
+    const ws = new WebSocket(`${WS_URL}/ws/files/${fileId}/progress?token=${encodeURIComponent(token)}`);
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.status === "ping") return;
+      if (data.status === "processing") {
+        setFiles((prev) => prev.map((f) => f.id === fileId ? { ...f, processing_status: "processing", processing_progress: data.progress, processing_total: data.total } : f));
+      } else if (data.status === "complete" || data.status === "error") {
+        setFiles((prev) => prev.map((f) => f.id === fileId ? { ...f, processing_status: data.status, processing_progress: data.progress ?? f.processing_progress, processing_total: data.total ?? f.processing_total, processing_error: data.message } : f));
+        ws.close();
+      }
+    };
+    ws.onerror = () => ws.close();
   };
 
   const handleSendMessage = async () => {
@@ -759,12 +794,24 @@ export default function Dashboard() {
               <div className="space-y-1">
                 {(showAllFiles ? files : files.slice(0, 8)).map((file) => {
                   const { Icon, color } = getSourceIcon(file.source_type || file.source);
+                  const isIndexing = file.processing_status === "pending" || file.processing_status === "processing";
                   return (
                     <motion.div key={file.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="group flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer">
                       <FileTypeIcon type={file.file_type} className="w-5 h-5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate">{file.filename}</p>
-                        <p className="text-xs text-gray-500">{formatFileSize(file.file_size)} • {formatDate(file.uploaded_at)}</p>
+                        {isIndexing ? (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <Loader2 className="w-3 h-3 text-purple-400 animate-spin shrink-0" />
+                            <span className="text-xs text-purple-400">
+                              {file.processing_status === "pending" || !file.processing_total ? "Queued..." : `Indexing ${file.processing_progress}/${file.processing_total}`}
+                            </span>
+                          </div>
+                        ) : file.processing_status === "error" ? (
+                          <p className="text-xs text-red-400 truncate" title={file.processing_error || undefined}>Indexing failed</p>
+                        ) : (
+                          <p className="text-xs text-gray-500">{formatFileSize(file.file_size)} • {formatDate(file.uploaded_at)}</p>
+                        )}
                       </div>
                       <div className="flex items-center gap-1"><Icon className={`w-3 h-3 ${color}`} /><button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded"><MoreHorizontal className="w-4 h-4 text-gray-400" /></button></div>
                     </motion.div>

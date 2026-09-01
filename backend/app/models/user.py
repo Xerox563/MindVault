@@ -62,6 +62,12 @@ class File(Base):
     external_id = Column(String, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
+    # background ingestion progress - pending until queued, then processing/complete/error
+    processing_status = Column(String, default="complete")
+    processing_progress = Column(Integer, default=0)
+    processing_total = Column(Integer, default=0)
+    processing_error = Column(Text, nullable=True)
+
     owner = relationship("User", back_populates="files")
     chunks = relationship("Chunk", back_populates="file")
 

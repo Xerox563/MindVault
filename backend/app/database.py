@@ -35,7 +35,19 @@ def _add_missing_columns():
                 if column.name in existing_columns:
                     continue
                 col_type = column.type.compile(engine.dialect)
-                conn.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {column.name} {col_type}"))
+                stmt = f"ALTER TABLE {table.name} ADD COLUMN {column.name} {col_type}"
+                # scalar defaults (e.g. Column(String, default="complete")) get backfilled
+                # onto existing rows too, not just new ones - callable defaults like
+                # datetime.utcnow are skipped since the app always sets those explicitly
+                if column.default is not None and getattr(column.default, "is_scalar", False):
+                    default_value = column.default.arg
+                    if isinstance(default_value, bool):
+                        stmt += f" DEFAULT {int(default_value)}"
+                    elif isinstance(default_value, (int, float)):
+                        stmt += f" DEFAULT {default_value}"
+                    elif isinstance(default_value, str):
+                        stmt += f" DEFAULT '{default_value.replace(chr(39), chr(39) + chr(39))}'"
+                conn.execute(text(stmt))
 
 def init_db():
     Base.metadata.create_all(bind=engine)

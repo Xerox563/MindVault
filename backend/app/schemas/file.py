@@ -15,6 +15,12 @@ class FileResponse(FileBase):
     user_id: int
     file_path: str
     uploaded_at: datetime
+    source: Optional[str] = "local"
+    source_type: Optional[str] = "local"
+    processing_status: Optional[str] = "complete"
+    processing_progress: Optional[int] = 0
+    processing_total: Optional[int] = 0
+    processing_error: Optional[str] = None
 
     class Config:
         from_attributes = True

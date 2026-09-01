@@ -1,13 +1,11 @@
 from sqlalchemy.orm import Session
 from app.models.user import File, Chunk, User
 from app.services.embeddings import get_embedding, get_chat_response, get_chat_response_stream
-from app.services.vectordb import search_similar
+from app.services.hybrid_retrieval import hybrid_search
 from app.services.user_settings import get_user_api_keys, base_provider
 from app.services.workspace import get_active_workspace_id
 from app.services.embedding_provider import resolve_embedding_provider
 from app.config import settings
-
-RELEVANCE_DISTANCE_THRESHOLD = 0.62
 
 def _retrieve(db: Session, question: str, user: User):
     # find the top matching chunks and turn them into an LLM prompt + citation list
@@ -23,13 +21,12 @@ def _retrieve(db: Session, question: str, user: User):
     if not query_embedding:
         return provider_id, api_key, None, None
 
-    similar_chunks = search_similar(query_embedding, user_id=user.id, n_results=5, workspace_id=workspace_id)
-    relevant_chunks = [c for c in similar_chunks if c["distance"] <= RELEVANCE_DISTANCE_THRESHOLD]
+    chunk_ids = hybrid_search(db, question, query_embedding, user.id, workspace_id)
 
     context = ""
     sources = []
-    for chunk in relevant_chunks:
-        chunk_record = db.query(Chunk).filter(Chunk.id == int(chunk["id"])).first()
+    for chunk_id in chunk_ids:
+        chunk_record = db.query(Chunk).filter(Chunk.id == int(chunk_id)).first()
         if chunk_record:
             file_query = db.query(File).filter(File.id == chunk_record.file_id)
             file_query = file_query.filter(File.workspace_id == workspace_id) if workspace_id else file_query.filter(File.user_id == user.id, File.workspace_id.is_(None))

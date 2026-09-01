@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, File as FileModel
@@ -7,8 +7,9 @@ from app.schemas.file import FileResponse
 from app.utils.deps import get_current_user
 from app.config import settings
 from app.services.extractor import extract_text
-from app.services.processor import process_file
 from app.services.workspace import get_active_workspace_id, require_role
+from app.core.queue import ingest_queue
+from app.workers.ingest import ingest_file
 from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api", tags=["files"])
@@ -53,17 +54,23 @@ async def upload_file(
         filename=uploaded_file.filename or "uploaded_file",
         file_path=file_path,
         file_type=file_ext,
-        file_size=len(content)
+        file_size=len(content),
+        processing_status="pending",
     )
     db.add(file_record)
     db.commit()
     db.refresh(file_record)
-    
+
+    # text extraction is fast (local parsing); chunking+embedding is the slow part
+    # that can take a while on a big file, so that's what actually goes to the queue
     text = extract_text(file_path, file_ext)
     if text:
         file_record.extracted_text = text
         db.commit()
-        process_file(db, file_record)
+        ingest_queue.enqueue(ingest_file, file_record.id, job_timeout=600)
+    else:
+        file_record.processing_status = "complete"  # nothing to index (e.g. empty file)
+        db.commit()
 
     return file_record
 
