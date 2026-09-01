@@ -31,7 +31,23 @@ PROVIDER_PRICING = {
         "embedding": {
             "input": Decimal("0"),
         }
-    }
+    },
+    "gemini": {
+        # Rough blended rate (Gemini 1.5 Flash tier). Gemini's actual per-model
+        # pricing varies a lot between Flash/Pro tiers - this is a placeholder,
+        # not exact, until per-model rates are tracked individually.
+        "chat": {
+            "input": Decimal("0.000075"),  # $0.075 per 1M tokens
+            "output": Decimal("0.0003"),   # $0.30 per 1M tokens
+        },
+        "embedding": {
+            "input": Decimal("0.00001"),
+        }
+    },
+    # OpenRouter routes to dozens of different underlying models with wildly
+    # different prices (free open models up to premium frontier models), so no
+    # single per-1K rate is meaningful here - falls through to the generic
+    # default below rather than pretending to be precise.
 }
 
 def calculate_cost(provider: str, operation: str, input_tokens: int, output_tokens: int = 0) -> Decimal:
@@ -45,8 +61,10 @@ def calculate_cost(provider: str, operation: str, input_tokens: int, output_toke
         pricing = PROVIDER_PRICING.get(base_provider(provider.lower()), {})
         
         if operation == "embedding":
-            # Embeddings only have input tokens
-            input_price = pricing.get("embedding", {}).get("input", Decimal("0"))
+            # Embeddings only have input tokens. Unknown providers (e.g. OpenRouter,
+            # which has no fixed rate) get a small non-zero default rather than a
+            # silent $0, so unpriced usage is still visible as *some* cost.
+            input_price = pricing.get("embedding", {}).get("input", Decimal("0.0001"))
             cost = (Decimal(input_tokens) / 1000) * input_price
         else:
             # Chat has both input and output

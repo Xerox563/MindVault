@@ -31,7 +31,7 @@ interface ChatHistoryItem { id: number; question: string; answer: string; create
 interface WorkspaceSummary { id: number; name: string; role: "owner" | "editor" | "viewer"; member_count: number; }
 interface WorkspaceMemberItem { id: number; email: string; role: string; status: string; }
 
-const PROVIDER_LABELS: Record<string, string> = { mistral: "Mistral AI", ollama: "Ollama" };
+const PROVIDER_LABELS: Record<string, string> = { mistral: "Mistral AI", ollama: "Ollama", gemini: "Google Gemini", openrouter: "OpenRouter" };
 const SOURCE_ICONS: Record<string, React.ElementType> = { local: FileIcon, drive: Cloud, sheets: Table, slack: Hash, notion: FileJson };
 const SOURCE_COLORS: Record<string, string> = { local: "text-gray-400", drive: "text-blue-400", sheets: "text-green-400", slack: "text-purple-400", notion: "text-yellow-400" };
 const INTEGRATION_ICONS: Record<string, React.ElementType> = { google_drive: Cloud, google_sheets: Table, slack: Hash, notion: FileJson };

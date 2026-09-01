@@ -9,7 +9,7 @@ from app.config import settings as app_settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-SUPPORTED_PROVIDERS = ["mistral"]
+SUPPORTED_PROVIDERS = ["mistral", "gemini", "openrouter"]
 
 @router.get("/api-keys", response_model=list[ApiKeyStatus])
 def list_api_keys(current_user: User = Depends(get_current_user)):

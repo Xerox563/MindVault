@@ -36,6 +36,13 @@ def delete_user_api_key(db: Session, user: User, provider: str) -> None:
         user.api_keys_encrypted = json.dumps(encrypted)
         db.commit()
 
+PROVIDER_PREFIXES = ("ollama", "mistral", "gemini", "openrouter")
+
 def base_provider(provider_id: str) -> str:
-    """Collapse 'ollama-llama3.2' -> 'ollama', leave others unchanged."""
-    return "ollama" if provider_id.startswith("ollama-") else provider_id
+    """Collapse a specific-model id like 'gemini-gemini-1.5-flash' or 'ollama-llama3.2'
+    down to its provider family ('gemini', 'ollama') so API keys/pricing lookups work
+    regardless of which model under that provider was picked."""
+    for prefix in PROVIDER_PREFIXES:
+        if provider_id == prefix or provider_id.startswith(prefix + "-"):
+            return prefix
+    return provider_id

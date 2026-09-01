@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # LLM Configuration - supports both Mistral and Ollama
     LLM_PROVIDER: str = "mistral"  # Default provider
     MISTRAL_API_KEY: str = ""  # Mistral API key
+    GEMINI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
     OLLAMA_HOST: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"

@@ -99,12 +99,13 @@ const getProviderColor = (provider: string) => {
   const colors: Record<string, string> = {
     'mistral': 'bg-blue-500',
     'ollama': 'bg-green-500',
-    'openai': 'bg-purple-500',
+    'gemini': 'bg-amber-500',
+    'openrouter': 'bg-pink-500',
     'default': 'bg-gray-500'
   };
   const key = provider.toLowerCase();
-  if (key.startsWith('ollama')) return colors.ollama;
-  return colors[key] || colors.default;
+  const prefix = Object.keys(colors).find((p) => p !== 'default' && key.startsWith(p));
+  return prefix ? colors[prefix] : colors.default;
 };
 
 export default function CostDashboard() {
