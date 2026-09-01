@@ -9,6 +9,7 @@ from app.api.drive import router as drive_router
 from app.api.settings import router as settings_router
 from app.api.cost import router as cost_router
 from app.api.integrations import router as integrations_router
+from app.api.workspaces import router as workspaces_router
 from app.database import init_db
 from app.config import settings
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
@@ -34,6 +35,7 @@ app.include_router(drive_router)
 app.include_router(settings_router)
 app.include_router(cost_router)
 app.include_router(integrations_router)
+app.include_router(workspaces_router)
 
 @app.on_event("startup")
 def startup():

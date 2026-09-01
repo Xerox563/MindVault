@@ -227,6 +227,9 @@ def get_current_user(
             db.add(user)
             db.commit()
             db.refresh(user)
+
+            from app.services.workspace import link_pending_invites
+            link_pending_invites(db, user)
         
         # Attach Clerk user data to the user object for Google Drive integration
         # Store external_accounts in a way that can be accessed later

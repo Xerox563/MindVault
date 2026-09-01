@@ -10,7 +10,8 @@ import {
   MoreHorizontal, ChevronDown, Check, Cpu, HardDrive, FileSpreadsheet,
   FileIcon, ScrollText, ChevronUp, Loader2, AlertCircle, Zap, Settings, Key,
   Trash2, RefreshCw, Link2, Sparkles, DollarSign, Table, Hash, FileJson,
-  Copy, CopyCheck, ArrowDown, SquarePen, SendHorizontal, Quote, History
+  Copy, CopyCheck, ArrowDown, SquarePen, SendHorizontal, Quote, History,
+  Users, UserPlus, Crown, Eye, Pencil
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/components/ThemeProvider";
@@ -27,6 +28,8 @@ interface Integration { id: string; name: string; description: string; icon: str
 interface ApiKeyStatus { provider: string; configured: boolean; source: "user" | "server" | "none"; }
 interface DriveFile { id: string; name: string; mimeType: string; synced?: boolean; }
 interface ChatHistoryItem { id: number; question: string; answer: string; created_at: string; }
+interface WorkspaceSummary { id: number; name: string; role: "owner" | "editor" | "viewer"; member_count: number; }
+interface WorkspaceMemberItem { id: number; email: string; role: string; status: string; }
 
 const PROVIDER_LABELS: Record<string, string> = { mistral: "Mistral AI", ollama: "Ollama" };
 const SOURCE_ICONS: Record<string, React.ElementType> = { local: FileIcon, drive: Cloud, sheets: Table, slack: Hash, notion: FileJson };
@@ -106,6 +109,15 @@ export default function Dashboard() {
   const [showHistory, setShowHistory] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(null);
+  const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
+  const [showWorkspacePanel, setShowWorkspacePanel] = useState(false);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberItem[]>([]);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("viewer");
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -162,6 +174,7 @@ export default function Dashboard() {
       fetchFiles();
       fetchLLMStatus();
       fetchIntegrations();
+      fetchWorkspaces();
     }
   }, [isLoaded, isSignedIn]);
 
@@ -229,6 +242,114 @@ export default function Dashboard() {
       }
     } catch (error) { console.error("Failed to fetch integrations:", error); }
   };
+
+  const fetchWorkspaces = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setWorkspaces(data.workspaces || []);
+        setActiveWorkspaceId(data.active_workspace_id ?? null);
+      }
+    } catch (error) { console.error("Failed to fetch workspaces:", error); }
+  };
+
+  const createWorkspace = async () => {
+    const name = newWorkspaceName.trim();
+    if (!name) return;
+    const token = await getAuthToken();
+    if (!token) return;
+    setWorkspaceBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+        setNewWorkspaceName("");
+        await fetchWorkspaces();
+        await fetchFiles();
+        setMessages([]);
+      } else {
+        const error = await res.json().catch(() => ({}));
+        alert(error.detail || "Failed to create workspace");
+      }
+    } catch (error) { console.error("Failed to create workspace:", error); }
+    finally { setWorkspaceBusy(false); }
+  };
+
+  const switchWorkspace = async (workspaceId: number | null) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    setShowWorkspaceSwitcher(false);
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces/switch`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ workspace_id: workspaceId }),
+      });
+      if (res.ok) {
+        setActiveWorkspaceId(workspaceId);
+        setMessages([]);
+        await fetchFiles();
+      }
+    } catch (error) { console.error("Failed to switch workspace:", error); }
+  };
+
+  const openWorkspacePanel = async () => {
+    setShowWorkspaceSwitcher(false);
+    setShowWorkspacePanel(true);
+    if (activeWorkspaceId) await fetchWorkspaceMembers(activeWorkspaceId);
+  };
+
+  const fetchWorkspaceMembers = async (workspaceId: number) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces/${workspaceId}/members`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setWorkspaceMembers(await res.json());
+    } catch (error) { console.error("Failed to fetch workspace members:", error); }
+  };
+
+  const inviteToWorkspace = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email || !activeWorkspaceId) return;
+    const token = await getAuthToken();
+    if (!token) return;
+    setWorkspaceBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces/${activeWorkspaceId}/invite`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, role: inviteRole }),
+      });
+      if (res.ok) {
+        setInviteEmail("");
+        await fetchWorkspaceMembers(activeWorkspaceId);
+        await fetchWorkspaces();
+      } else {
+        const error = await res.json().catch(() => ({}));
+        alert(error.detail || "Failed to invite member");
+      }
+    } catch (error) { console.error("Failed to invite member:", error); }
+    finally { setWorkspaceBusy(false); }
+  };
+
+  const removeWorkspaceMember = async (memberId: number) => {
+    if (!activeWorkspaceId) return;
+    const token = await getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces/${activeWorkspaceId}/members/${memberId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        await fetchWorkspaceMembers(activeWorkspaceId);
+        await fetchWorkspaces();
+      }
+    } catch (error) { console.error("Failed to remove member:", error); }
+  };
+
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || null;
+  const canManageFiles = !activeWorkspace || activeWorkspace.role !== "viewer";
 
   const fetchDriveFiles = async () => {
     const token = await getAuthToken();
@@ -514,21 +635,78 @@ export default function Dashboard() {
             className={`w-[280px] ${borderColor} border-r flex flex-col h-screen ${cardBg}`}
           >
             <div className={`p-4 ${borderColor} border-b`}>
-              <Link href="/" className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
                   <Brain className="w-5 h-5 text-white" />
                 </div>
                 <span className="font-semibold text-lg">MindVault</span>
               </Link>
+
+              <div className="relative">
+                <button
+                  onClick={() => setShowWorkspaceSwitcher((s) => !s)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg ${inputBg} ${borderColor} border hover:border-purple-500/30 transition-colors text-left`}
+                >
+                  <Users className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span className="flex-1 text-sm truncate">{activeWorkspace ? activeWorkspace.name : "Personal"}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                </button>
+
+                <AnimatePresence>
+                  {showWorkspaceSwitcher && (
+                    <>
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowWorkspaceSwitcher(false)} className="fixed inset-0 z-40" />
+                      <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className={`absolute left-0 top-full mt-2 w-full ${cardBg} border ${borderColor} rounded-xl z-50 overflow-hidden shadow-2xl`}>
+                        <button onClick={() => switchWorkspace(null)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 transition-colors ${!activeWorkspaceId ? "text-purple-400" : "text-gray-300"}`}>
+                          <FileIcon className="w-3.5 h-3.5 shrink-0" /><span className="flex-1 text-left">Personal</span>{!activeWorkspaceId && <Check className="w-3.5 h-3.5" />}
+                        </button>
+                        {workspaces.map((w) => (
+                          <button key={w.id} onClick={() => switchWorkspace(w.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 transition-colors ${activeWorkspaceId === w.id ? "text-purple-400" : "text-gray-300"}`}>
+                            <Users className="w-3.5 h-3.5 shrink-0" /><span className="flex-1 text-left truncate">{w.name}</span>
+                            <span className="text-[10px] text-gray-500 uppercase">{w.role}</span>
+                            {activeWorkspaceId === w.id && <Check className="w-3.5 h-3.5" />}
+                          </button>
+                        ))}
+                        <div className={`border-t ${borderColor} p-2 space-y-1`}>
+                          {activeWorkspace && (
+                            <button onClick={openWorkspacePanel} className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                              <UserPlus className="w-3.5 h-3.5" />Manage members
+                            </button>
+                          )}
+                          <div className="flex items-center gap-1.5 px-1">
+                            <input
+                              type="text"
+                              value={newWorkspaceName}
+                              onChange={(e) => setNewWorkspaceName(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && createWorkspace()}
+                              placeholder="New workspace name"
+                              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                            />
+                            <button onClick={createWorkspace} disabled={!newWorkspaceName.trim() || workspaceBusy} className="p-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50">
+                              {workspaceBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
-              <label className="block w-full cursor-pointer">
-                <input type="file" onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} className="hidden" accept=".pdf,.docx,.txt,.csv,.xlsx,.md" disabled={uploading} />
-                <motion.div whileHover={{ scale: uploading ? 1 : 1.02 }} whileTap={{ scale: uploading ? 1 : 0.98 }} className={`w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg flex items-center justify-center gap-2 mb-2 ${uploading ? 'opacity-50' : ''}`}>
-                  {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /><span className="font-medium">Uploading... {uploadProgress}%</span></> : <><Upload className="w-4 h-4" /><span className="font-medium">Upload Files</span></>}
-                </motion.div>
-              </label>
+              {canManageFiles ? (
+                <label className="block w-full cursor-pointer">
+                  <input type="file" onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} className="hidden" accept=".pdf,.docx,.txt,.csv,.xlsx,.md" disabled={uploading} />
+                  <motion.div whileHover={{ scale: uploading ? 1 : 1.02 }} whileTap={{ scale: uploading ? 1 : 0.98 }} className={`w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg flex items-center justify-center gap-2 mb-2 ${uploading ? 'opacity-50' : ''}`}>
+                    {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /><span className="font-medium">Uploading... {uploadProgress}%</span></> : <><Upload className="w-4 h-4" /><span className="font-medium">Upload Files</span></>}
+                  </motion.div>
+                </label>
+              ) : (
+                <div className="w-full py-3 px-4 bg-white/5 rounded-lg flex items-center justify-center gap-2 mb-2 text-gray-500">
+                  <Eye className="w-4 h-4" /><span className="text-sm">View-only access</span>
+                </div>
+              )}
               <p className="text-xs text-gray-500 text-center mb-6">PDF, DOCX, TXT, CSV, XLSX, MD</p>
 
               <div className="relative mb-6">
@@ -913,6 +1091,74 @@ export default function Dashboard() {
                     ))}
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showWorkspacePanel && activeWorkspace && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowWorkspacePanel(false)} className="fixed inset-0 bg-black/50 z-50" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[460px] h-fit max-h-[70vh] bg-[#1a1a1a] border border-white/10 rounded-2xl z-50 overflow-hidden shadow-2xl flex flex-col">
+              <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+                <div>
+                  <h3 className="font-semibold">{activeWorkspace.name}</h3>
+                  <p className="text-xs text-gray-500">{workspaceMembers.length} member{workspaceMembers.length === 1 ? "" : "s"}</p>
+                </div>
+                <button onClick={() => setShowWorkspacePanel(false)}><X className="w-4 h-4 text-gray-400" /></button>
+              </div>
+
+              {activeWorkspace.role === "owner" && (
+                <div className="p-4 border-b border-white/10 shrink-0">
+                  <label className="block text-xs text-gray-500 mb-2">Invite a teammate</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && inviteToWorkspace()}
+                      placeholder="teammate@company.com"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                    />
+                    <select
+                      value={inviteRole}
+                      onChange={(e) => setInviteRole(e.target.value as "editor" | "viewer")}
+                      className="bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-sm text-white focus:outline-none"
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                    </select>
+                    <button onClick={inviteToWorkspace} disabled={!inviteEmail.trim() || workspaceBusy} className="px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50">
+                      {workspaceBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-1.5">Editors can upload and delete files. Viewers can only ask questions.</p>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto p-3">
+                {workspaceMembers.map((member) => (
+                  <div key={member.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-xs font-medium shrink-0">
+                      {member.email[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{member.email}</p>
+                      {member.status === "invited" && <p className="text-[11px] text-orange-400">Invited - waiting for sign up</p>}
+                    </div>
+                    <span className="flex items-center gap-1 text-xs text-gray-500 shrink-0">
+                      {member.role === "owner" ? <Crown className="w-3.5 h-3.5 text-amber-400" /> : member.role === "editor" ? <Pencil className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {member.role}
+                    </span>
+                    {activeWorkspace.role === "owner" && member.role !== "owner" && (
+                      <button onClick={() => removeWorkspaceMember(member.id)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-white/10 rounded-lg shrink-0" title="Remove member">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </motion.div>
           </>

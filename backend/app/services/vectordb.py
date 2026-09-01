@@ -18,14 +18,18 @@ def add_embedding(chunk_id: int, text: str, embedding: list[float], metadata: di
         metadatas=[metadata]
     )
 
-def search_similar(query_embedding: list[float], user_id: int, n_results: int = 5) -> list[dict]:
+def search_similar(query_embedding: list[float], user_id: int, n_results: int = 5, workspace_id: int | None = None) -> list[dict]:
     """Returns nearest chunks with their L2 distance so callers can drop irrelevant
     matches (Chroma's default n_results are always returned even when nothing
-    is actually relevant, e.g. small talk against a document collection)."""
+    is actually relevant, e.g. small talk against a document collection).
+
+    Scoped to a workspace's shared files when workspace_id is given, otherwise to
+    the user's own personal (non-workspace) files."""
+    where = {"workspace_id": workspace_id} if workspace_id else {"$and": [{"user_id": user_id}, {"workspace_id": 0}]}
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=n_results,
-        where={"user_id": user_id},
+        where=where,
         include=["documents", "metadatas", "distances"]
     )
     if not results["ids"] or not results["ids"][0]:

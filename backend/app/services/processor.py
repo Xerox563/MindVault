@@ -33,5 +33,5 @@ def process_file(db: Session, file: File, provider_id: str | None = None, api_ke
                 chunk_id=chunk_record.id,
                 text=text,
                 embedding=embedding_vector,
-                metadata={"file_id": file.id, "filename": file.filename, "user_id": file.user_id}
+                metadata={"file_id": file.id, "filename": file.filename, "user_id": file.user_id, "workspace_id": file.workspace_id or 0}
             )

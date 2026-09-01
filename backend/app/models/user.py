@@ -15,16 +15,42 @@ class User(Base):
     notion_api_key = Column(String, nullable=True)
     preferred_provider = Column(String, nullable=True)
     api_keys_encrypted = Column(Text, nullable=True)
+    current_workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     files = relationship("File", back_populates="owner")
     chat_history = relationship("ChatHistory", back_populates="user")
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    members = relationship("WorkspaceMember", back_populates="workspace")
+
+class WorkspaceMember(Base):
+    __tablename__ = "workspace_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # null until the invited email signs up
+    invited_email = Column(String, nullable=False)
+    role = Column(String, default="viewer")  # owner, editor, viewer
+    status = Column(String, default="active")  # active, invited
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    workspace = relationship("Workspace", back_populates="members")
+    user = relationship("User")
 
 class File(Base):
     __tablename__ = "files"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)  # null = personal file, not shared
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     file_type = Column(String, nullable=False)

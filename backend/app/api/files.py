@@ -9,6 +9,7 @@ from app.config import settings
 from app.services.extractor import extract_text
 from app.services.processor import process_file
 from app.services.user_settings import get_user_api_keys, base_provider
+from app.services.workspace import get_active_workspace_id, require_role
 from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api", tags=["files"])
@@ -27,7 +28,14 @@ async def upload_file(
 ):
     if not validate_file(uploaded_file.filename or ""):
         raise HTTPException(400, "Invalid file type")
-    
+
+    workspace_id = get_active_workspace_id(db, current_user)
+    if workspace_id:
+        try:
+            require_role(db, workspace_id, current_user, "editor")
+        except PermissionError:
+            raise HTTPException(403, "Viewers can't upload files to this workspace")
+
     content = await uploaded_file.read()
     if len(content) > settings.MAX_FILE_SIZE:
         raise HTTPException(400, "File too large")
@@ -42,6 +50,7 @@ async def upload_file(
     file_ext = os.path.splitext(uploaded_file.filename or "")[1].lower()
     file_record = FileModel(
         user_id=current_user.id,
+        workspace_id=workspace_id,
         filename=uploaded_file.filename or "uploaded_file",
         file_path=file_path,
         file_type=file_ext,
@@ -61,15 +70,27 @@ async def upload_file(
 
     return file_record
 
+def _scoped_file_query(db: Session, current_user: User):
+    workspace_id = get_active_workspace_id(db, current_user)
+    query = db.query(FileModel)
+    if workspace_id:
+        return query.filter(FileModel.workspace_id == workspace_id)
+    return query.filter(FileModel.user_id == current_user.id, FileModel.workspace_id.is_(None))
+
 @router.get("/files", response_model=list[FileResponse])
 def list_files(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(FileModel).filter(FileModel.user_id == current_user.id).all()
+    return _scoped_file_query(db, current_user).all()
 
 @router.delete("/files/{file_id}")
 def delete_file(file_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    file = db.query(FileModel).filter(FileModel.id == file_id, FileModel.user_id == current_user.id).first()
+    file = _scoped_file_query(db, current_user).filter(FileModel.id == file_id).first()
     if not file:
         raise HTTPException(404, "File not found")
+    if file.workspace_id:
+        try:
+            require_role(db, file.workspace_id, current_user, "editor")
+        except PermissionError:
+            raise HTTPException(403, "Viewers can't delete files from this workspace")
     if os.path.exists(file.file_path):
         os.remove(file.file_path)
     db.delete(file)
@@ -78,7 +99,7 @@ def delete_file(file_id: int, db: Session = Depends(get_db), current_user: User 
 
 @router.get("/files/{file_id}/content")
 def get_file_content(file_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    file = db.query(FileModel).filter(FileModel.id == file_id, FileModel.user_id == current_user.id).first()
+    file = _scoped_file_query(db, current_user).filter(FileModel.id == file_id).first()
     if not file:
         raise HTTPException(404, "File not found")
     return {"content": file.extracted_text or "", "file_type": file.file_type, "filename": file.filename}

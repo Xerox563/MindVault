@@ -3,6 +3,7 @@ from app.models.user import File, Chunk, User
 from app.services.embeddings import get_embedding, get_chat_response, get_chat_response_stream
 from app.services.vectordb import search_similar
 from app.services.user_settings import get_user_api_keys, base_provider
+from app.services.workspace import get_active_workspace_id
 from app.config import settings
 
 RELEVANCE_DISTANCE_THRESHOLD = 0.62
@@ -11,12 +12,13 @@ def _retrieve(db: Session, question: str, user: User):
     # find the top matching chunks and turn them into an LLM prompt + citation list
     provider_id = user.preferred_provider or settings.LLM_PROVIDER
     api_key = get_user_api_keys(user).get(base_provider(provider_id))
+    workspace_id = get_active_workspace_id(db, user)
 
     query_embedding = get_embedding(question, provider_id=provider_id, api_key=api_key, db=db, user_id=user.id)
     if not query_embedding:
         return provider_id, api_key, None, None
 
-    similar_chunks = search_similar(query_embedding, user_id=user.id, n_results=5)
+    similar_chunks = search_similar(query_embedding, user_id=user.id, n_results=5, workspace_id=workspace_id)
     relevant_chunks = [c for c in similar_chunks if c["distance"] <= RELEVANCE_DISTANCE_THRESHOLD]
 
     context = ""
@@ -24,7 +26,9 @@ def _retrieve(db: Session, question: str, user: User):
     for chunk in relevant_chunks:
         chunk_record = db.query(Chunk).filter(Chunk.id == int(chunk["id"])).first()
         if chunk_record:
-            file = db.query(File).filter(File.id == chunk_record.file_id, File.user_id == user.id).first()
+            file_query = db.query(File).filter(File.id == chunk_record.file_id)
+            file_query = file_query.filter(File.workspace_id == workspace_id) if workspace_id else file_query.filter(File.user_id == user.id, File.workspace_id.is_(None))
+            file = file_query.first()
             if file:
                 context += chunk_record.content + "\n\n"
                 sources.append({
