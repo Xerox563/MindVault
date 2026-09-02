@@ -17,6 +17,7 @@ class User(Base):
     preferred_embedding_provider = Column(String, nullable=True)
     api_keys_encrypted = Column(Text, nullable=True)
     current_workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)
+    current_space_id = Column(Integer, ForeignKey("spaces.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     files = relationship("File", back_populates="owner")
@@ -46,12 +47,36 @@ class WorkspaceMember(Base):
     workspace = relationship("Workspace", back_populates="members")
     user = relationship("User")
 
+class Space(Base):
+    __tablename__ = "spaces"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False)
+    name = Column(String, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    members = relationship("SpaceMember", back_populates="space")
+
+class SpaceMember(Base):
+    __tablename__ = "space_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String, default="viewer")  # owner, editor, viewer
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    space = relationship("Space", back_populates="members")
+    user = relationship("User")
+
 class File(Base):
     __tablename__ = "files"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)  # null means a personal file
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=True)  # null means the workspace's general pool
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     file_type = Column(String, nullable=False)
@@ -98,6 +123,7 @@ class ChatHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    space_id = Column(Integer, ForeignKey("spaces.id"), nullable=True)
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
