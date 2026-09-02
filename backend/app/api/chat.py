@@ -10,6 +10,7 @@ from app.services.rag import rag_query, rag_query_stream
 from app.services.llm_service import llm_service
 from app.services.user_settings import get_user_api_keys
 from app.services.cache import get_cached_result, cache_result, get_cache_stats, clear_expired_cache
+from app.services.space import get_active_space_id
 from app.config import settings
 from app.core.rate_limit import limiter
 
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 def _save_chat(db: Session, user: User, question: str, answer: str, sources: list):
     # store the Q&A pair and its citations so chat history and sources work later
-    chat = ChatHistory(user_id=user.id, question=question, answer=answer)
+    chat = ChatHistory(user_id=user.id, space_id=get_active_space_id(db, user), question=question, answer=answer)
     db.add(chat)
     db.commit()
     db.refresh(chat)
@@ -97,7 +98,11 @@ def ask_question_stream(request: Request, request_data: AskRequest, db: Session 
 
 @router.get("/chat/history")
 def get_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    chats = db.query(ChatHistory).filter(ChatHistory.user_id == current_user.id).order_by(ChatHistory.created_at.desc()).all()
+    space_id = get_active_space_id(db, current_user)
+    chats = db.query(ChatHistory).filter(
+        ChatHistory.user_id == current_user.id,
+        ChatHistory.space_id == space_id if space_id else ChatHistory.space_id.is_(None)
+    ).order_by(ChatHistory.created_at.desc()).all()
     return [{"id": c.id, "question": c.question, "answer": c.answer, "created_at": c.created_at} for c in chats]
 
 @router.get("/llm/status")
