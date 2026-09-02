@@ -8,6 +8,7 @@ from app.utils.deps import get_current_user
 from app.config import settings
 from app.services.extractor import extract_text
 from app.services.workspace import get_active_workspace_id, require_role
+from app.services.space import get_active_space_id, require_space_role
 from app.services.processor import process_file
 from app.core.rate_limit import limiter
 
@@ -35,6 +36,13 @@ async def upload_file(
         except PermissionError:
             raise HTTPException(403, "Viewers can't upload files to this workspace")
 
+    space_id = get_active_space_id(db, current_user)
+    if space_id:
+        try:
+            require_space_role(db, space_id, current_user, "editor")
+        except PermissionError:
+            raise HTTPException(403, "Viewers can't upload files to this space")
+
     content = await uploaded_file.read()
     if len(content) > settings.MAX_FILE_SIZE:
         raise HTTPException(400, "File too large")
@@ -50,6 +58,7 @@ async def upload_file(
     file_record = FileModel(
         user_id=current_user.id,
         workspace_id=workspace_id,
+        space_id=space_id,
         filename=uploaded_file.filename or "uploaded_file",
         file_path=file_path,
         file_type=file_ext,
@@ -82,9 +91,12 @@ async def upload_file(
 
 def _scoped_file_query(db: Session, current_user: User):
     workspace_id = get_active_workspace_id(db, current_user)
+    space_id = get_active_space_id(db, current_user)
     query = db.query(FileModel)
+    if space_id:
+        return query.filter(FileModel.space_id == space_id)
     if workspace_id:
-        return query.filter(FileModel.workspace_id == workspace_id)
+        return query.filter(FileModel.workspace_id == workspace_id, FileModel.space_id.is_(None))
     return query.filter(FileModel.user_id == current_user.id, FileModel.workspace_id.is_(None))
 
 @router.get("/files", response_model=list[FileResponse])
@@ -96,7 +108,12 @@ def delete_file(file_id: int, db: Session = Depends(get_db), current_user: User 
     file = _scoped_file_query(db, current_user).filter(FileModel.id == file_id).first()
     if not file:
         raise HTTPException(404, "File not found")
-    if file.workspace_id:
+    if file.space_id:
+        try:
+            require_space_role(db, file.space_id, current_user, "editor")
+        except PermissionError:
+            raise HTTPException(403, "Viewers can't delete files from this space")
+    elif file.workspace_id:
         try:
             require_role(db, file.workspace_id, current_user, "editor")
         except PermissionError:
