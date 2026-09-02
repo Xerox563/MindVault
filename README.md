@@ -1,6 +1,6 @@
 # MindVault
 
-**AI-powered document intelligence.** Upload your files, ask questions in plain English, get real answers with sources — no more `Ctrl+F` through fifty PDFs.
+**AI-powered document intelligence.** Upload your files, ask questions in plain English, get real answers with sources - no more `Ctrl+F` through fifty PDFs.
 
 ---
 
@@ -25,7 +25,7 @@
 
 ## Problem Statement
 
-Knowledge inside an organization is scattered across PDFs, spreadsheets, Slack threads, and Notion pages. Finding a single fact usually means manually opening files one by one and searching through them, hoping the right document is even the one you picked. This gets worse as the number of files grows — search-by-memory does not scale, and plain keyword search misses answers that are phrased differently from the query.
+Knowledge inside an organization is scattered across PDFs, spreadsheets, Slack threads, and Notion pages. Finding a single fact usually means manually opening files one by one and searching through them, hoping the right document is even the one you picked. This gets worse as the number of files grows - search-by-memory does not scale, and plain keyword search misses answers that are phrased differently from the query.
 
 ## How We Solved It
 
@@ -39,15 +39,15 @@ MindVault is a self-hostable, multi-tenant RAG (Retrieval-Augmented Generation) 
 
 ## Features
 
-- **Multi-format ingestion** — PDF, DOCX, XLSX, TXT, CSV, and Markdown
-- **Hybrid retrieval** — keyword (BM25) + vector search for more accurate answers on exact terms, names, and numbers
-- **Source-cited answers** — every answer links back to the exact file and chunk it came from
-- **Multiple LLM providers** — Mistral, Gemini, OpenRouter, or a fully local Ollama model, switchable per user
-- **External integrations** — Google Drive, Google Sheets, Slack, and Notion, so existing content can be synced in without manual export
-- **Workspaces** — shared team knowledge bases with role-based access, separate from personal files
-- **Cost monitoring** — per-request token and dollar tracking, budget alerts, and a live cost dashboard
-- **Authentication** — Clerk-based sign-in with Google OAuth support
-- **Hosted vector storage** — Chroma Cloud, so embeddings persist independently of the app server
+- **Multi-format ingestion** - PDF, DOCX, XLSX, TXT, CSV, and Markdown
+- **Hybrid retrieval** - keyword (BM25) + vector search for more accurate answers on exact terms, names, and numbers
+- **Source-cited answers** - every answer links back to the exact file and chunk it came from
+- **Multiple LLM providers** - Mistral, Gemini, OpenRouter, or a fully local Ollama model, switchable per user
+- **External integrations** - Google Drive, Google Sheets, Slack, and Notion, so existing content can be synced in without manual export
+- **Workspaces** - shared team knowledge bases with role-based access, separate from personal files
+- **Cost monitoring** - per-request token and dollar tracking, budget alerts, and a live cost dashboard
+- **Authentication** - Clerk-based sign-in with Google OAuth support
+- **Hosted vector storage** - Chroma Cloud, so embeddings persist independently of the app server
 
 ---
 
