@@ -14,7 +14,7 @@ def extract_text(file_path: str, file_type: str) -> Optional[str]:
             result = extract_docx(file_path)
         elif ext == ".xlsx":
             result = extract_xlsx(file_path)
-        elif ext == ".txt":
+        elif ext in (".txt", ".csv", ".md"):
             result = extract_txt(file_path)
         else:
             log_error(f"Unsupported file type: {ext}")

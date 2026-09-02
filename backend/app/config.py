@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     CHROMA_TENANT: str = ""
     CHROMA_DATABASE: str = ""
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
-    ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".xlsx", ".txt"]
+    ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".xlsx", ".txt", ".csv", ".md"]
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
