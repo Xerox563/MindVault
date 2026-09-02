@@ -3,10 +3,16 @@ import chromadb
 from chromadb.config import Settings
 from app.config import settings
 
-CHROMA_DIR = settings.CHROMA_PERSIST_DIR
-os.makedirs(CHROMA_DIR, exist_ok=True)
-
-chroma_client = chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))
+if settings.CHROMA_API_KEY:
+    chroma_client = chromadb.CloudClient(
+        api_key=settings.CHROMA_API_KEY,
+        tenant=settings.CHROMA_TENANT,
+        database=settings.CHROMA_DATABASE,
+    )
+else:
+    CHROMA_DIR = settings.CHROMA_PERSIST_DIR
+    os.makedirs(CHROMA_DIR, exist_ok=True)
+    chroma_client = chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))
 
 # each embedding dimension gets its own chroma collection since chroma needs one fixed size per collection
 _LEGACY_DIM = 1024

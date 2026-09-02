@@ -7,8 +7,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24
     UPLOAD_DIR: str = "data/uploads"
-    # render's disk is ephemeral so chroma data goes to /tmp there instead
+    # render's disk is ephemeral so chroma data goes to /tmp there instead (only used when CHROMA_API_KEY is unset)
     CHROMA_PERSIST_DIR: str = "/tmp/chroma" if os.environ.get("RENDER") else "data/chroma"
+    # Chroma Cloud - when set, vectordb.py uses CloudClient instead of local PersistentClient
+    CHROMA_API_KEY: str = ""
+    CHROMA_TENANT: str = ""
+    CHROMA_DATABASE: str = ""
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".xlsx", ".txt"]
     GOOGLE_CLIENT_ID: str = ""
