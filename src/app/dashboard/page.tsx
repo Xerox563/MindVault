@@ -1467,6 +1467,73 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {showSpacePanel && activeSpace && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSpacePanel(false)} className="fixed inset-0 bg-black/50 z-50" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed inset-0 m-auto w-[460px] h-fit max-h-[70vh] bg-[var(--candy-card)] text-[var(--candy-ink)] sticker rounded-2xl z-50 overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-[var(--candy-ink)]/12 flex items-center justify-between shrink-0">
+                <div>
+                  <h3 className="font-semibold">{activeSpace.name}</h3>
+                  <p className="text-xs text-[var(--candy-ink)]/45">{spaceMembers.length} member{spaceMembers.length === 1 ? "" : "s"}</p>
+                </div>
+                <button onClick={() => setShowSpacePanel(false)}><X className="w-4 h-4 text-[var(--candy-ink)]/60" /></button>
+              </div>
+
+              {activeSpace.role === "owner" && (
+                <div className="p-4 border-b border-[var(--candy-ink)]/12 shrink-0">
+                  <label className="block text-xs text-[var(--candy-ink)]/45 mb-2">Add a workspace member to this space</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={spaceInviteEmail}
+                      onChange={(e) => setSpaceInviteEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && inviteToSpace()}
+                      placeholder="teammate@company.com"
+                      className="flex-1 bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/12 rounded-lg px-3 py-2 text-sm placeholder:opacity-40 focus:outline-none focus:border-[var(--candy-pink)]"
+                    />
+                    <select
+                      value={spaceInviteRole}
+                      onChange={(e) => setSpaceInviteRole(e.target.value as "editor" | "viewer")}
+                      className="bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/12 rounded-lg px-2 py-2 text-sm focus:outline-none"
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                    </select>
+                    <button onClick={inviteToSpace} disabled={!spaceInviteEmail.trim() || spaceBusy} className="px-3 py-2 text-sm bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] hover:brightness-110 rounded-lg disabled:opacity-50">
+                      {spaceBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-1.5">Only people already in the workspace can be added to a space.</p>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto p-3">
+                {spaceMembers.map((member) => (
+                  <div key={member.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-[var(--candy-ink)]/5">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--candy-cyan)] to-[var(--candy-lavender)] text-white flex items-center justify-center text-xs font-medium shrink-0">
+                      {member.email[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{member.email}</p>
+                    </div>
+                    <span className="flex items-center gap-1 text-xs text-[var(--candy-ink)]/45 shrink-0">
+                      {member.role === "owner" ? <Crown className="w-3.5 h-3.5 text-amber-400" /> : member.role === "editor" ? <Pencil className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {member.role}
+                    </span>
+                    {activeSpace.role === "owner" && member.role !== "owner" && (
+                      <button onClick={() => removeSpaceMember(member.id)} className="p-1.5 text-[var(--candy-ink)]/45 hover:text-[var(--candy-red)] hover:bg-[var(--candy-ink)]/10 rounded-lg shrink-0" title="Remove member">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {viewerFile && (
         <DocumentViewer
           fileName={viewerFile.fileName}
