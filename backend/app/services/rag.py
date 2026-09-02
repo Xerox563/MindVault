@@ -4,6 +4,7 @@ from app.services.embeddings import get_embedding, get_chat_response, get_chat_r
 from app.services.hybrid_retrieval import hybrid_search
 from app.services.user_settings import get_user_api_keys, base_provider
 from app.services.workspace import get_active_workspace_id
+from app.services.space import get_active_space_id
 from app.services.embedding_provider import resolve_embedding_provider
 from app.config import settings
 
@@ -12,6 +13,7 @@ def _retrieve(db: Session, question: str, user: User):
     provider_id = user.preferred_provider or settings.LLM_PROVIDER
     api_key = get_user_api_keys(user).get(base_provider(provider_id))
     workspace_id = get_active_workspace_id(db, user)
+    space_id = get_active_space_id(db, user)
 
     embedding_provider_id, embedding_api_key = resolve_embedding_provider(db, user)
     if not embedding_provider_id:
@@ -21,7 +23,7 @@ def _retrieve(db: Session, question: str, user: User):
     if not query_embedding:
         return provider_id, api_key, None, None
 
-    chunk_ids = hybrid_search(db, question, query_embedding, user.id, workspace_id)
+    chunk_ids = hybrid_search(db, question, query_embedding, user.id, workspace_id, space_id)
 
     hits = []
     files_by_id = {}
@@ -32,7 +34,12 @@ def _retrieve(db: Session, question: str, user: User):
         file = files_by_id.get(chunk_record.file_id)
         if file is None:
             file_query = db.query(File).filter(File.id == chunk_record.file_id)
-            file_query = file_query.filter(File.workspace_id == workspace_id) if workspace_id else file_query.filter(File.user_id == user.id, File.workspace_id.is_(None))
+            if space_id:
+                file_query = file_query.filter(File.space_id == space_id)
+            elif workspace_id:
+                file_query = file_query.filter(File.workspace_id == workspace_id, File.space_id.is_(None))
+            else:
+                file_query = file_query.filter(File.user_id == user.id, File.workspace_id.is_(None))
             file = file_query.first()
             if file:
                 files_by_id[chunk_record.file_id] = file

@@ -37,21 +37,23 @@ _STOPWORDS = {
 def _tokenize(text: str) -> list[str]:
     return [t for t in _TOKEN_RE.findall(text.lower()) if t not in _STOPWORDS and len(t) > 1]
 
-def _scoped_chunks(db: Session, user_id: int, workspace_id: int | None) -> list[Chunk]:
+def _scoped_chunks(db: Session, user_id: int, workspace_id: int | None, space_id: int | None) -> list[Chunk]:
     query = db.query(Chunk).join(File, File.id == Chunk.file_id)
-    if workspace_id:
-        query = query.filter(File.workspace_id == workspace_id)
+    if space_id:
+        query = query.filter(File.space_id == space_id)
+    elif workspace_id:
+        query = query.filter(File.workspace_id == workspace_id, File.space_id.is_(None))
     else:
         query = query.filter(File.user_id == user_id, File.workspace_id.is_(None))
     return query.all()
 
-def hybrid_search(db: Session, question: str, query_embedding: list[float], user_id: int, workspace_id: int | None = None) -> list[str]:
+def hybrid_search(db: Session, question: str, query_embedding: list[float], user_id: int, workspace_id: int | None = None, space_id: int | None = None) -> list[str]:
     # rebuilds the keyword index on every call, fine at this scale but not for a huge corpus
-    vector_hits = search_similar(query_embedding, user_id=user_id, n_results=VECTOR_CANDIDATES, workspace_id=workspace_id)
+    vector_hits = search_similar(query_embedding, user_id=user_id, n_results=VECTOR_CANDIDATES, workspace_id=workspace_id, space_id=space_id)
     vector_ranks = {hit["id"]: rank for rank, hit in enumerate(vector_hits)}
     vector_distance = {hit["id"]: hit["distance"] for hit in vector_hits}
 
-    chunks = _scoped_chunks(db, user_id, workspace_id)
+    chunks = _scoped_chunks(db, user_id, workspace_id, space_id)
     bm25_ranks: dict[str, int] = {}
     if chunks:
         corpus = [_tokenize(c.content) for c in chunks]

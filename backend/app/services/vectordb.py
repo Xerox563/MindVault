@@ -34,9 +34,14 @@ def add_embedding(chunk_id: int, text: str, embedding: list[float], metadata: di
         metadatas=[metadata]
     )
 
-def search_similar(query_embedding: list[float], user_id: int, n_results: int = 5, workspace_id: int | None = None) -> list[dict]:
+def search_similar(query_embedding: list[float], user_id: int, n_results: int = 5, workspace_id: int | None = None, space_id: int | None = None) -> list[dict]:
     collection = _collection_for_dim(len(query_embedding))
-    where = {"workspace_id": workspace_id} if workspace_id else {"$and": [{"user_id": user_id}, {"workspace_id": 0}]}
+    if space_id:
+        where = {"space_id": space_id}
+    elif workspace_id:
+        where = {"$and": [{"workspace_id": workspace_id}, {"space_id": 0}]}
+    else:
+        where = {"$and": [{"user_id": user_id}, {"workspace_id": 0}]}
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=n_results,

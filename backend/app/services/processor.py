@@ -43,7 +43,13 @@ def process_file(db: Session, file: File, on_progress: Optional[Callable[[int, i
                 chunk_id=chunk_record.id,
                 text=text,
                 embedding=embedding_vector,
-                metadata={"file_id": file.id, "filename": file.filename, "user_id": file.user_id, "workspace_id": file.workspace_id or 0}
+                metadata={
+                    "file_id": file.id,
+                    "filename": file.filename,
+                    "user_id": file.user_id,
+                    "workspace_id": file.workspace_id or 0,
+                    "space_id": file.space_id or 0,
+                }
             )
 
         if on_progress:
