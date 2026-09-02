@@ -8,8 +8,7 @@ from app.utils.deps import get_current_user
 from app.config import settings
 from app.services.extractor import extract_text
 from app.services.workspace import get_active_workspace_id, require_role
-from app.core.queue import ingest_queue
-from app.workers.ingest import ingest_file
+from app.services.processor import process_file
 from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api", tags=["files"])
@@ -61,12 +60,20 @@ async def upload_file(
     db.commit()
     db.refresh(file_record)
 
-    # extraction is fast, chunking and embedding is the slow part that goes to the queue
     text = extract_text(file_path, file_ext)
     if text:
         file_record.extracted_text = text
+        file_record.processing_status = "processing"
         db.commit()
-        ingest_queue.enqueue(ingest_file, file_record.id, job_timeout=600)
+        try:
+            process_file(db, file_record)
+            file_record.processing_status = "complete"
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            file_record.processing_status = "error"
+            file_record.processing_error = str(e)[:500]
+            db.commit()
     else:
         file_record.processing_status = "complete"  # nothing to index (e.g. empty file)
         db.commit()
