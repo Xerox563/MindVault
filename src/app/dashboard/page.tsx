@@ -30,6 +30,8 @@ interface DriveFile { id: string; name: string; mimeType: string; synced?: boole
 interface ChatHistoryItem { id: number; question: string; answer: string; created_at: string; }
 interface WorkspaceSummary { id: number; name: string; role: "owner" | "editor" | "viewer"; member_count: number; }
 interface WorkspaceMemberItem { id: number; email: string; role: string; status: string; }
+interface SpaceSummary { id: number; name: string; role: "owner" | "editor" | "viewer"; member_count: number; }
+interface SpaceMemberItem { id: number; email: string; role: string; }
 
 const PROVIDER_LABELS: Record<string, string> = { mistral: "Mistral AI", ollama: "Ollama", gemini: "Google Gemini", openrouter: "OpenRouter" };
 const base_provider_client = (providerId: string) => {
@@ -127,6 +129,15 @@ export default function Dashboard() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("viewer");
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
+  const [spaces, setSpaces] = useState<SpaceSummary[]>([]);
+  const [activeSpaceId, setActiveSpaceId] = useState<number | null>(null);
+  const [showSpaceSwitcher, setShowSpaceSwitcher] = useState(false);
+  const [showSpacePanel, setShowSpacePanel] = useState(false);
+  const [spaceMembers, setSpaceMembers] = useState<SpaceMemberItem[]>([]);
+  const [newSpaceName, setNewSpaceName] = useState("");
+  const [spaceInviteEmail, setSpaceInviteEmail] = useState("");
+  const [spaceInviteRole, setSpaceInviteRole] = useState<"editor" | "viewer">("viewer");
+  const [spaceBusy, setSpaceBusy] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -187,6 +198,10 @@ export default function Dashboard() {
       fetchWorkspaces();
     }
   }, [isLoaded, isSignedIn]);
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) fetchSpaces();
+  }, [isLoaded, isSignedIn, activeWorkspaceId]);
 
   useEffect(() => {
     const handleDriveMessage = (event: MessageEvent) => {
@@ -368,8 +383,115 @@ export default function Dashboard() {
     } catch (error) { console.error("Failed to remove member:", error); }
   };
 
+  const fetchSpaces = async () => {
+    if (!activeWorkspaceId) { setSpaces([]); setActiveSpaceId(null); return; }
+    const token = await getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/spaces?workspace_id=${activeWorkspaceId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setSpaces(data.spaces || []);
+        setActiveSpaceId(data.active_space_id ?? null);
+      }
+    } catch (error) { console.error("Failed to fetch spaces:", error); }
+  };
+
+  const createSpace = async () => {
+    const name = newSpaceName.trim();
+    if (!name || !activeWorkspaceId) return;
+    const token = await getAuthToken();
+    if (!token) return;
+    setSpaceBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/spaces`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ workspace_id: activeWorkspaceId, name }),
+      });
+      if (res.ok) {
+        setNewSpaceName("");
+        await fetchSpaces();
+        await fetchFiles();
+        setMessages([]);
+      } else {
+        const error = await res.json().catch(() => ({}));
+        alert(error.detail || "Failed to create space");
+      }
+    } catch (error) { console.error("Failed to create space:", error); }
+    finally { setSpaceBusy(false); }
+  };
+
+  const switchSpace = async (spaceId: number | null) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    setShowSpaceSwitcher(false);
+    try {
+      const res = await fetch(`${API_URL}/api/spaces/switch`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ space_id: spaceId }),
+      });
+      if (res.ok) {
+        setActiveSpaceId(spaceId);
+        setMessages([]);
+        await fetchFiles();
+      }
+    } catch (error) { console.error("Failed to switch space:", error); }
+  };
+
+  const openSpacePanel = async () => {
+    setShowSpaceSwitcher(false);
+    setShowSpacePanel(true);
+    if (activeSpaceId) await fetchSpaceMembers(activeSpaceId);
+  };
+
+  const fetchSpaceMembers = async (spaceId: number) => {
+    const token = await getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/spaces/${spaceId}/members`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setSpaceMembers(await res.json());
+    } catch (error) { console.error("Failed to fetch space members:", error); }
+  };
+
+  const inviteToSpace = async () => {
+    const email = spaceInviteEmail.trim().toLowerCase();
+    if (!email || !activeSpaceId) return;
+    const token = await getAuthToken();
+    if (!token) return;
+    setSpaceBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/spaces/${activeSpaceId}/members`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, role: spaceInviteRole }),
+      });
+      if (res.ok) {
+        setSpaceInviteEmail("");
+        await fetchSpaceMembers(activeSpaceId);
+        await fetchSpaces();
+      } else {
+        const error = await res.json().catch(() => ({}));
+        alert(error.detail || "Failed to add member");
+      }
+    } catch (error) { console.error("Failed to add space member:", error); }
+    finally { setSpaceBusy(false); }
+  };
+
+  const removeSpaceMember = async (memberId: number) => {
+    if (!activeSpaceId) return;
+    const token = await getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/spaces/${activeSpaceId}/members/${memberId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        await fetchSpaceMembers(activeSpaceId);
+        await fetchSpaces();
+      }
+    } catch (error) { console.error("Failed to remove space member:", error); }
+  };
+
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || null;
-  const canManageFiles = !activeWorkspace || activeWorkspace.role !== "viewer";
+  const activeSpace = spaces.find((s) => s.id === activeSpaceId) || null;
+  const canManageFiles = (!activeWorkspace || activeWorkspace.role !== "viewer") && (!activeSpace || activeSpace.role !== "viewer");
 
   const fetchDriveFiles = async () => {
     const token = await getAuthToken();
@@ -775,6 +897,61 @@ export default function Dashboard() {
                   )}
                 </AnimatePresence>
               </div>
+
+              {activeWorkspace && (
+                <div className="relative mt-2">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowSpaceSwitcher((s) => !s)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl ${inputBg} border ${borderColor} hover:border-[var(--candy-pink)] transition-colors text-left`}
+                  >
+                    <Cpu className="w-4 h-4 text-[var(--candy-pink)] shrink-0" />
+                    <span className="flex-1 text-sm truncate">{activeSpace ? activeSpace.name : "General"}</span>
+                    <ChevronDown className="w-3.5 h-3.5 opacity-50 shrink-0" />
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {showSpaceSwitcher && (
+                      <>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSpaceSwitcher(false)} className="fixed inset-0 z-40" />
+                        <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} className={`absolute left-0 top-full mt-2 w-full ${cardBg} sticker-sm rounded-xl z-50 overflow-hidden`}>
+                          <button onClick={() => switchSpace(null)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-[var(--candy-ink)]/5 transition-colors ${!activeSpaceId ? "text-[var(--candy-pink)] font-medium" : ""}`}>
+                            <FileIcon className="w-3.5 h-3.5 shrink-0" /><span className="flex-1 text-left">General</span>{!activeSpaceId && <Check className="w-3.5 h-3.5" />}
+                          </button>
+                          {spaces.map((s) => (
+                            <button key={s.id} onClick={() => switchSpace(s.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-[var(--candy-ink)]/5 transition-colors ${activeSpaceId === s.id ? "text-[var(--candy-pink)] font-medium" : ""}`}>
+                              <Cpu className="w-3.5 h-3.5 shrink-0" /><span className="flex-1 text-left truncate">{s.name}</span>
+                              <span className="text-[10px] opacity-50 uppercase">{s.role}</span>
+                              {activeSpaceId === s.id && <Check className="w-3.5 h-3.5" />}
+                            </button>
+                          ))}
+                          <div className={`border-t ${borderColor} p-2 space-y-1`}>
+                            {activeSpace && (
+                              <button onClick={openSpacePanel} className="w-full flex items-center gap-2 px-2 py-1.5 text-xs opacity-70 hover:opacity-100 hover:bg-[var(--candy-ink)]/5 rounded-lg transition-colors">
+                                <UserPlus className="w-3.5 h-3.5" />Manage members
+                              </button>
+                            )}
+                            <div className="flex items-center gap-1.5 px-1">
+                              <input
+                                type="text"
+                                value={newSpaceName}
+                                onChange={(e) => setNewSpaceName(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && createSpace()}
+                                placeholder="New space name"
+                                className="flex-1 bg-[var(--candy-ink)]/5 border border-[var(--candy-ink)]/15 rounded-lg px-2 py-1.5 text-xs placeholder:opacity-40 focus:outline-none focus:border-[var(--candy-pink)]"
+                              />
+                              <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }} onClick={createSpace} disabled={!newSpaceName.trim() || spaceBusy} className="p-1.5 bg-gradient-to-br from-[var(--candy-pink)] to-[var(--candy-lavender)] text-white rounded-lg disabled:opacity-50">
+                                {spaceBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                              </motion.button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
