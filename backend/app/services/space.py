@@ -46,18 +46,22 @@ def create_space(db: Session, workspace_id: int, user: User, name: str) -> Space
     db.commit()
     return space
 
-def add_space_member(db: Session, space_id: int, workspace_id: int, user_id: int, role: str) -> SpaceMember:
-    # the person being added must already belong to the parent workspace, a space narrows access, it doesn't grant new access
-    if not get_workspace_membership(db, workspace_id, user_id):
-        raise ValueError("User is not a member of the parent workspace")
+def add_space_member(db: Session, space_id: int, workspace_id: int, email: str, role: str) -> SpaceMember:
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise ValueError("No account found with that email")
 
-    existing = get_space_membership(db, space_id, user_id)
+    # the person being added must already belong to the parent workspace, a space narrows access, it doesn't grant new access
+    if not get_workspace_membership(db, workspace_id, user.id):
+        raise ValueError("This person is not a member of the workspace yet")
+
+    existing = get_space_membership(db, space_id, user.id)
     if existing:
         existing.role = role
         db.commit()
         return existing
 
-    member = SpaceMember(space_id=space_id, user_id=user_id, role=role)
+    member = SpaceMember(space_id=space_id, user_id=user.id, role=role)
     db.add(member)
     db.commit()
     db.refresh(member)

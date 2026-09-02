@@ -66,19 +66,19 @@ def invite_member(space_id: int, payload: dict, db: Session = Depends(get_db), c
     if not space:
         raise HTTPException(404, "Space not found")
 
-    user_id = payload.get("user_id")
+    email = (payload.get("email") or "").strip().lower()
     role = payload.get("role") or "viewer"
     if role not in ("editor", "viewer"):
         raise HTTPException(400, "Role must be 'editor' or 'viewer'")
-    if not user_id:
-        raise HTTPException(400, "User id is required")
+    if not email:
+        raise HTTPException(400, "Email is required")
 
     try:
-        member = add_space_member(db, space_id, space.workspace_id, user_id, role)
+        member = add_space_member(db, space_id, space.workspace_id, email, role)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
-    return {"id": member.id, "user_id": member.user_id, "role": member.role}
+    return {"id": member.id, "email": member.user.email, "role": member.role}
 
 @router.delete("/{space_id}/members/{member_id}")
 def remove_member(space_id: int, member_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
